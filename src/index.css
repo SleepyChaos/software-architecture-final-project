@@ -1,0 +1,29 @@
+/** 
+ * Tailwind CSS基础样式导入
+ * 提供原子化CSS类的基础功能
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * 根元素样式配置
+ * 定义全局字体、行高、字重等基础排版属性
+ */
+:root {
+  /* 系统字体栈：优先使用系统原生字体，确保最佳显示效果 */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  /* 标准行高：提供良好的阅读体验 */
+  line-height: 1.5;
+  /* 标准字重：确保文本清晰度 */
+  font-weight: 400;
+
+  /* 字体合成：禁止浏览器自动调整字重 */
+  font-synthesis: none;
+  /* 文本渲染：优化文本显示质量 */
+  text-rendering: optimizeLegibility;
+  /* WebKit抗锯齿：提升字体平滑度 */
+  -webkit-font-smoothing: antialiased;
+  /* macOS抗锯齿：确保跨平台字体一致性 */
+  -moz-osx-font-smoothing: grayscale;
+}

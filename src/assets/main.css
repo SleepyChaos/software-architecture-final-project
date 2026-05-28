@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 终端主题：深蓝背景与白色卡片 */
+:root {
+  --primary: #1E3A8A;
+  --secondary: #F3F4F6;
+}
+
+body {
+  background-color: var(--secondary);
+}
+
