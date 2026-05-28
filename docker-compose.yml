@@ -1,0 +1,32 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+  backend:
+    build:
+      context: .
+      dockerfile: backbone/Dockerfile
+    depends_on:
+      - redis
+    expose:
+      - "8000"
+    environment:
+      PYTHONPATH: /app
+    command: >
+      sh -c "cd /data && PYTHONPATH=/app uvicorn main:app --host 0.0.0.0 --port 8000"
+    volumes:
+      - sqlite_data:/data
+
+  redis:
+    image: redis:7-alpine
+    expose:
+      - "6379"
+
+volumes:
+  sqlite_data:
