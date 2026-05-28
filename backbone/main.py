@@ -49,27 +49,28 @@ def startup_event():
     # 创建数据库会话
     db = database.SessionLocal()
     try:
-        # 检查是否已有用户
-        # 使用first()方法获取查询结果的第一条记录，如果没有记录则返回None
-        user = db.query(models.User).first()
-        
-        # 如果没有找到用户，创建一个默认用户
-        if not user:
-            # 创建测试用户对象
-            # 读者号: 001, 密码: 123456
-            test_user = models.User(
-                reader_id="001",  # 设置读者ID
-                password="123456"  # 设置密码（注意：生产环境应该加密存储）
+        seed_users = [
+            ("001", "123456"),
+            ("face-user", "face"),
+        ]
+
+        created_users = []
+        for reader_id, password in seed_users:
+            user = db.query(models.User).filter(models.User.reader_id == reader_id).first()
+            if user:
+                continue
+
+            db.add(
+                models.User(
+                    reader_id=reader_id,
+                    password=password,
+                )
             )
-            
-            # 将用户对象添加到数据库会话
-            db.add(test_user)
-            
-            # 提交事务，将数据持久化到数据库
+            created_users.append(reader_id)
+
+        if created_users:
             db.commit()
-            
-            # 打印日志信息，确认用户创建成功
-            print("初始化：已创建测试用户 (reader_id='001', password='123456')")
+            print(f"初始化：已创建演示用户 {created_users}")
     
     # finally块确保无论是否发生异常都会执行
     finally:

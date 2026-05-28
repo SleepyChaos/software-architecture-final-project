@@ -6,6 +6,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+
 /**
  * 用户数据接口定义
  * 描述用户对象的结构和类型
@@ -45,7 +47,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     try {
       // 调用后端登录API
-      const response = await fetch('http://49.235.37.140:8001/login', {
+      const response = await fetch(`${API_BASE_URL}/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
