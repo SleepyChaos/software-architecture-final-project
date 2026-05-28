@@ -96,9 +96,18 @@ Docker Compose 启动后：
 ```bash
 docker build -t library-system-frontend:latest .
 docker build -t library-system-backend:latest -f backbone/Dockerfile .
+docker build -t library-system-redis:latest -f redis.Dockerfile .
 ```
 
 如果你使用的是隔离镜像环境的本地集群，例如 `minikube`、`kind`、`k3d`，还需要将镜像加载到集群中。
+
+以 `kind` 为例：
+
+```bash
+kind load docker-image library-system-frontend:latest --name library-system
+kind load docker-image library-system-backend:latest --name library-system
+kind load docker-image library-system-redis:latest --name library-system
+```
 
 ### 2. 应用清单
 
@@ -110,6 +119,12 @@ kubectl apply -f k8s/
 
 ```bash
 kubectl port-forward svc/library-frontend 8080:80
+```
+
+如果本机 `8080` 端口已经被 Docker Compose 或其他服务占用，可以改成：
+
+```bash
+kubectl port-forward svc/library-frontend 8081:80
 ```
 
 访问地址：
