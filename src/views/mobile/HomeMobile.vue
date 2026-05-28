@@ -37,7 +37,7 @@
       <h2 class="text-xl font-semibold text-gray-900 mb-4">热门推荐</h2>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <BookCard
-          v-for="book in booksStore.recommendedBooks"
+          v-for="book in recommendedBooks"
           :key="book.id"
           :book="book"
         />
@@ -50,14 +50,31 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import SearchBar from '@/components/SearchBar.vue'
 import BottomNav from '@/components/BottomNav.vue'
 import BookCard from '@/components/BookCard.vue'
-import { useBooksStore } from '@/stores/books'
+import { useBooksStore, type Book } from '@/stores/books'
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
 // 状态管理：图书存储实例
 const booksStore = useBooksStore()
+const recommendedBooks = ref<Book[]>([])
+
+async function loadRecommendedBooks() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/books/recommended`)
+    if (!response.ok) {
+      throw new Error('加载推荐图书失败')
+    }
+
+    recommendedBooks.value = await response.json()
+  } catch (error) {
+    console.error('加载推荐图书失败，已降级到本地数据:', error)
+    recommendedBooks.value = booksStore.recommendedBooks
+  }
+}
 
 /**
  * 组件挂载时初始化图书数据
@@ -65,5 +82,6 @@ const booksStore = useBooksStore()
  */
 onMounted(() => {
   booksStore.initialize()
+  loadRecommendedBooks()
 })
 </script>

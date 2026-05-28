@@ -1,5 +1,5 @@
 <template>
-  <div class="bg-white shadow-sm border-b border-gray-200">
+  <div class="search-container bg-white shadow-sm border-b border-gray-200">
     <div class="max-w-7xl mx-auto px-4 py-4">
       <div class="flex items-center gap-4">
         <!-- 搜索输入框 -->
@@ -46,7 +46,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Search, X } from 'lucide-vue-next'
 import { useBooksStore } from '@/stores/books'
@@ -54,32 +54,43 @@ import { debounce } from '@/utils'
 
 const router = useRouter()
 const booksStore = useBooksStore()
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+const defaultSuggestions = ['深入理解计算机系统', '算法导论', '红楼梦', '活着', '人工智能', '数据结构']
 
 // 状态
 const searchValue = ref('')
 const showSuggestions = ref(false)
 const isSearching = ref(false)
+const suggestions = ref<string[]>(defaultSuggestions)
 
-// 搜索建议（基于最近搜索和热门搜索）
-const suggestions = computed(() => {
-  const recentSearches = ['深入理解计算机系统', '算法导论', '红楼梦', '活着']
-  const popularSearches = ['人工智能', '数据结构', '操作系统', '计算机网络']
-  
-  if (!searchValue.value) {
-    return [...recentSearches, ...popularSearches].slice(0, 6)
+async function loadSuggestions(query: string) {
+  if (!query.trim()) {
+    suggestions.value = defaultSuggestions
+    return
   }
-  
-  // 根据输入过滤建议
-  const allSuggestions = [...recentSearches, ...popularSearches]
-  return allSuggestions.filter(item => 
-    item.toLowerCase().includes(searchValue.value.toLowerCase())
-  ).slice(0, 6)
-})
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/search/suggestions?q=${encodeURIComponent(query)}`)
+    if (!response.ok) {
+      throw new Error('加载搜索建议失败')
+    }
+
+    suggestions.value = await response.json()
+  } catch (error) {
+    console.error('加载搜索建议失败，已降级到默认建议:', error)
+    suggestions.value = defaultSuggestions.filter(item =>
+      item.toLowerCase().includes(query.toLowerCase())
+    ).slice(0, 6)
+  }
+}
 
 // 防抖搜索
 const debouncedSearch = debounce((value: string) => {
+  loadSuggestions(value)
   if (value.trim()) {
     performSearch(value)
+  } else {
+    booksStore.searchBooks('')
   }
 }, 300)
 
@@ -122,6 +133,7 @@ async function performSearch(query: string) {
 function clearSearch() {
   searchValue.value = ''
   showSuggestions.value = false
+  suggestions.value = defaultSuggestions
   booksStore.searchBooks('')
 }
 
