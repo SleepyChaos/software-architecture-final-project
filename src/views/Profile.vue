@@ -173,7 +173,7 @@ const loansStore = useLoansStore()
 
 // 倒计时状态：用于自动返回首页
 const countdown = ref(60)
-let timer: number | null = null
+let timer: ReturnType<typeof setInterval> | null = null
 
 /**
  * 退出函数：返回首页

@@ -1,0 +1,11 @@
+.git
+.gitignore
+.vscode
+.idea
+.DS_Store
+node_modules
+.venv
+dist
+backbone/__pycache__
+backbone/*.pyc
+*.log
