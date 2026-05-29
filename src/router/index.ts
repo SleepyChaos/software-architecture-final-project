@@ -19,6 +19,7 @@ import History from '@/views/History.vue'
 import Profile from '@/views/Profile.vue'
 import Borrow from '@/views/Borrow.vue'
 import Return from '@/views/Return.vue'
+import Statistics from '@/views/Statistics.vue'
 // import Renew from '@/views/Renew.vue'
 
 /**
@@ -145,6 +146,12 @@ const routes: RouteRecordRaw[] = [
     name: 'Profile',
     component: Profile,
     meta: { title: '个人中心', authRequired: true }
+  },
+  {
+    path: '/statistics',
+    name: 'Statistics',
+    component: Statistics,
+    meta: { title: '数据统计' }
   }
 ]
 

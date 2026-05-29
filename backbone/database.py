@@ -1,21 +1,14 @@
-# 导入SQLAlchemy核心组件
-from sqlalchemy import create_engine  # 用于创建数据库引擎
-from sqlalchemy.ext.declarative import declarative_base  # 用于创建模型基类
-from sqlalchemy.orm import sessionmaker  # 用于创建数据库会话工厂
+import os
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
-# 数据库文件路径，使用SQLite
-# SQLite是一个轻量级文件数据库，适合开发和测试环境
-# connect_args={"check_same_thread": False} 是SQLite必须的配置，因为SQLite默认只允许单线程访问
-# 这个参数允许多线程访问同一个数据库连接，是FastAPI等异步框架必需的
-SQLALCHEMY_DATABASE_URL = "sqlite:///./sql_app.db"
-
-# 创建数据库引擎
-# 数据库引擎是SQLAlchemy的核心，负责管理数据库连接
-# echo=True 表示会打印SQL语句，方便调试（当前设置为False，不打印SQL语句）
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,  # 数据库连接字符串
-    connect_args={"check_same_thread": False}  # SQLite多线程配置
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://library:library@127.0.0.1:5432/library",
 )
+
+engine = create_engine(DATABASE_URL)
 
 # 创建数据库会话工厂
 # sessionmaker是一个工厂函数，用于创建数据库会话类

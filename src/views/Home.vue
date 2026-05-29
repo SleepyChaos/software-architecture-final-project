@@ -128,19 +128,21 @@
       </div>
     </div>
 
-    <!-- 底部快捷操作区：图书续借入口 -->
     <div class="w-full bg-white/50 backdrop-blur-sm border-t border-slate-200">
-      <!-- 底部内容区：水平居中，续借按钮 -->
-      <div class="max-w-7xl mx-auto px-6 py-6 flex justify-center">
-        <!-- 续借按钮：白色背景，边框，时钟图标 -->
+      <div class="max-w-7xl mx-auto px-6 py-6 flex justify-center gap-4">
         <router-link
           to="/renew"
           class="flex items-center gap-3 px-8 py-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md hover:border-blue-300 hover:bg-blue-50 transition-all group"
         >
-          <!-- 时钟图标：灰色，悬停变蓝色 -->
           <Clock class="w-6 h-6 text-slate-400 group-hover:text-blue-600" />
-          <!-- 按钮文字：图书续借 -->
           <span class="text-lg font-medium text-slate-600 group-hover:text-blue-700">图书续借</span>
+        </router-link>
+        <router-link
+          to="/statistics"
+          class="flex items-center gap-3 px-8 py-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md hover:border-emerald-300 hover:bg-emerald-50 transition-all group"
+        >
+          <BarChart3 class="w-6 h-6 text-slate-400 group-hover:text-emerald-600" />
+          <span class="text-lg font-medium text-slate-600 group-hover:text-emerald-700">数据统计</span>
         </router-link>
       </div>
     </div>
@@ -149,7 +151,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { BookOpen, BookUp, BookDown, UserCircle, Clock, User } from 'lucide-vue-next'
+import { BookOpen, BookUp, BookDown, UserCircle, Clock, User, BarChart3 } from 'lucide-vue-next'
 import { useBooksStore } from '@/stores/books'
 import { useLoansStore } from '@/stores/loans'
 import { useAuthStore } from '@/stores/auth'

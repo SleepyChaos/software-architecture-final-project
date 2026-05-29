@@ -3,6 +3,7 @@ kind: ConfigMap
 metadata:
   name: library-backend-config
 data:
+  DATABASE_URL: postgresql://library:library@library-postgres:5432/library
   REDIS_URL: redis://library-redis:6379/0
   CACHE_TTL_RECOMMENDED: "300"
   CACHE_TTL_SUGGESTIONS: "180"
