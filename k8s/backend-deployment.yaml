@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: library-backend
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app: library-backend
@@ -24,7 +24,7 @@ spec:
           command:
             - sh
             - -c
-            - cd /data && PYTHONPATH=/app uvicorn main:app --host 0.0.0.0 --port 8000
+            - PYTHONPATH=/app uvicorn main:app --host 0.0.0.0 --port 8000
           livenessProbe:
             httpGet:
               path: /healthz
@@ -37,10 +37,3 @@ spec:
               port: 8000
             initialDelaySeconds: 5
             periodSeconds: 10
-          volumeMounts:
-            - name: sqlite-data
-              mountPath: /data
-      volumes:
-        - name: sqlite-data
-          persistentVolumeClaim:
-            claimName: library-backend-sqlite-pvc
