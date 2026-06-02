@@ -37,3 +37,30 @@ spec:
               port: 8000
             initialDelaySeconds: 5
             periodSeconds: 10
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: library-rabbitmq-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: library-rabbitmq-worker
+  template:
+    metadata:
+      labels:
+        app: library-rabbitmq-worker
+    spec:
+      containers:
+        - name: worker
+          image: library-system-backend:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: library-backend-config
+          command:
+            - sh
+            - -c
+            - PYTHONPATH=/app python rabbitmq_worker.py

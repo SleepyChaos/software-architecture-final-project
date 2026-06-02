@@ -4,3 +4,6 @@ sqlalchemy
 pydantic
 redis
 psycopg2-binary
+prometheus-client
+elasticsearch
+pika

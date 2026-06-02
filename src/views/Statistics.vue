@@ -3,7 +3,8 @@
     <div class="w-full bg-white shadow-sm z-10">
       <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <button @click="$router.push('/')" class="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+          <button @click="$router.push('/')"
+            class="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
             <ArrowLeft class="w-5 h-5" />
           </button>
           <h1 class="text-lg font-bold text-slate-800">数据统计</h1>
@@ -25,8 +26,8 @@
         </div>
 
         <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-2">
-          <h2 class="text-base font-bold text-slate-700 mb-4">热门图书 Top 10</h2>
-          <v-chart :option="topBooksOption" autoresize style="height: 400px" />
+          <h2 class="text-base font-bold text-slate-700 mb-4">热门搜索词 Top 10</h2>
+          <v-chart :option="searchTrendOption" autoresize style="height: 400px" />
         </div>
       </div>
     </div>
@@ -34,7 +35,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ArrowLeft } from 'lucide-vue-next'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
@@ -46,6 +47,27 @@ import { useBooksStore } from '@/stores/books'
 use([CanvasRenderer, PieChart, BarChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent])
 
 const booksStore = useBooksStore()
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
+const searchTrends = ref<Array<{ term: string; count: number }>>([])
+
+async function loadSearchTrends() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/analytics/search-trends?limit=10`)
+    if (!response.ok) {
+      throw new Error('加载搜索热词失败')
+    }
+
+    searchTrends.value = await response.json()
+  } catch (error) {
+    searchTrends.value = [
+      { term: '深入理解计算机系统', count: 12 },
+      { term: '算法导论', count: 10 },
+      { term: '红楼梦', count: 9 },
+      { term: '活着', count: 8 },
+      { term: '人类简史', count: 6 },
+    ]
+  }
+}
 
 const categoryOption = computed(() => {
   const count: Record<string, number> = {}
@@ -105,20 +127,16 @@ const monthlyOption = computed(() => {
   }
 })
 
-const topBooksOption = computed(() => {
-  const titles = booksStore.books.map(b => b.title)
-  const books = [
-    { title: '深入理解计算机系统', count: 87 },
-    { title: '活着', count: 76 },
-    { title: '红楼梦', count: 68 },
-    { title: '算法导论', count: 59 },
-    { title: '人类简史', count: 52 },
-    { title: '百年孤独', count: 45 },
-    { title: '三体', count: 41 },
-    { title: '围城', count: 36 },
-    { title: '数据结构与算法', count: 30 },
-    { title: '计算机网络', count: 25 },
-  ]
+const searchTrendOption = computed(() => {
+  const trends = searchTrends.value.length > 0
+    ? searchTrends.value
+    : [
+      { term: '深入理解计算机系统', count: 12 },
+      { term: '算法导论', count: 10 },
+      { term: '红楼梦', count: 9 },
+      { term: '活着', count: 8 },
+      { term: '人类简史', count: 6 },
+    ]
 
   return {
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
@@ -130,13 +148,13 @@ const topBooksOption = computed(() => {
     },
     yAxis: {
       type: 'category',
-      data: books.map(b => b.title).reverse(),
+      data: trends.map(item => item.term).reverse(),
       axisLine: { lineStyle: { color: '#e2e8f0' } },
       axisLabel: { color: '#334155' },
     },
     series: [{
       type: 'bar',
-      data: books.map(b => b.count).reverse(),
+      data: trends.map(item => item.count).reverse(),
       barWidth: '60%',
       itemStyle: {
         borderRadius: [0, 6, 6, 0],
@@ -144,5 +162,10 @@ const topBooksOption = computed(() => {
       },
     }],
   }
+})
+
+onMounted(() => {
+  booksStore.initialize()
+  loadSearchTrends()
 })
 </script>

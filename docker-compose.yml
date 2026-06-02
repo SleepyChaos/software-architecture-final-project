@@ -18,16 +18,38 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      elasticsearch:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
     expose:
       - "8000"
     environment:
       PYTHONPATH: /app
       DATABASE_URL: postgresql://library:library@db:5432/library
       REDIS_URL: redis://redis:6379/0
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F
       CACHE_TTL_RECOMMENDED: 300
       CACHE_TTL_SUGGESTIONS: 180
     command: >
       sh -c "PYTHONPATH=/app uvicorn main:app --host 0.0.0.0 --port 8000"
+
+  rabbitmq-worker:
+    build:
+      context: .
+      dockerfile: backbone/Dockerfile
+    depends_on:
+      rabbitmq:
+        condition: service_started
+      redis:
+        condition: service_started
+    environment:
+      PYTHONPATH: /app
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F
+    command: >
+      sh -c "PYTHONPATH=/app python rabbitmq_worker.py"
 
   db:
     container_name: library-db
@@ -52,5 +74,40 @@ services:
     expose:
       - "6379"
 
+  elasticsearch:
+    container_name: library-elasticsearch
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.2
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    expose:
+      - "9200"
+    ports:
+      - "9200:9200"
+
+  rabbitmq:
+    container_name: library-rabbitmq
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  prometheus:
+    container_name: library-prometheus
+    image: prom/prometheus:v2.54.1
+    depends_on:
+      - backend
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+
 volumes:
   pgdata:
+  prometheus-data:

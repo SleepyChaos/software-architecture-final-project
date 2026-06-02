@@ -36,11 +36,7 @@
       <!-- 热门推荐：显示推荐图书列表 -->
       <h2 class="text-xl font-semibold text-gray-900 mb-4">热门推荐</h2>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <BookCard
-          v-for="book in recommendedBooks"
-          :key="book.id"
-          :book="book"
-        />
+        <BookCard v-for="book in recommendedBooks" :key="book.id" :book="book" />
       </div>
     </div>
 
@@ -56,7 +52,7 @@ import BottomNav from '@/components/BottomNav.vue'
 import BookCard from '@/components/BookCard.vue'
 import { useBooksStore, type Book } from '@/stores/books'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 // 状态管理：图书存储实例
 const booksStore = useBooksStore()

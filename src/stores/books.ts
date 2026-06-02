@@ -6,6 +6,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
+
 /**
  * 图书副本信息接口
  * 描述每册图书的具体信息和状态
@@ -56,6 +58,7 @@ export interface Category {
 export const useBooksStore = defineStore('books', () => {
   // 状态定义
   const books = ref<Book[]>([])                    // 图书列表
+  const remoteBooks = ref<Book[] | null>(null)      // 后端检索结果
   const categories = ref<Category[]>([])         // 图书分类列表
   const isLoading = ref(false)                     // 加载状态
   const error = ref<string | null>(null)         // 错误信息
@@ -67,7 +70,7 @@ export const useBooksStore = defineStore('books', () => {
    * 根据搜索词和分类进行双重过滤
    */
   const filteredBooks = computed(() => {
-    let result = books.value
+    let result = remoteBooks.value ?? books.value
 
     // 按搜索词过滤（标题、作者、ISBN）
     if (searchQuery.value) {
@@ -87,10 +90,10 @@ export const useBooksStore = defineStore('books', () => {
     return result
   })
 
-/**
-   * 计算属性：可借图书列表
-   * 过滤出所有可借副本数大于0的图书
-   */
+  /**
+     * 计算属性：可借图书列表
+     * 过滤出所有可借副本数大于0的图书
+     */
   const availableBooks = computed(() =>
     books.value.filter(book => book.availableCopies > 0)
   )
@@ -104,19 +107,19 @@ export const useBooksStore = defineStore('books', () => {
     return availableBooks.value.slice(0, 6)
   })
 
-/**
-   * 辅助函数：生成图书副本信息
-   * 根据条码号和可借数量生成详细的副本列表
-   * @param barcodes - 图书条码号列表
-   * @param availableCount - 可借副本数量
-   * @returns 图书副本信息数组
-   */
+  /**
+     * 辅助函数：生成图书副本信息
+     * 根据条码号和可借数量生成详细的副本列表
+     * @param barcodes - 图书条码号列表
+     * @param availableCount - 可借副本数量
+     * @returns 图书副本信息数组
+     */
   function generateCopies(barcodes: string[], availableCount: number): BookCopy[] {
     return barcodes.map((code, idx) => {
       // 判断副本是否可借
       const isAvailable = idx < availableCount
       const status = isAvailable ? 'available' : 'borrowed'
-      
+
       // 随机分配馆藏地和书架位置
       const branch = idx % 2 === 0 ? '仓前校区' : '本部'
       const shelf = idx % 2 === 0 ? '3楼A区' : '2楼C区'
@@ -140,10 +143,10 @@ export const useBooksStore = defineStore('books', () => {
     })
   }
 
-/**
-   * 生成模拟图书数据
-   * 创建包含多种类型图书的示例数据集
-   */
+  /**
+     * 生成模拟图书数据
+     * 创建包含多种类型图书的示例数据集
+     */
   function generateMockBooks() {
     // 模拟图书数据数组
     const mockBooks: Book[] = [
@@ -245,10 +248,10 @@ export const useBooksStore = defineStore('books', () => {
       }
     ]
 
-/**
-     * 模拟分类数据
-     * 定义图书的主要分类及其描述
-     */
+    /**
+         * 模拟分类数据
+         * 定义图书的主要分类及其描述
+         */
     const mockCategories: Category[] = [
       { id: '1', name: '文学', description: '小说、诗歌、散文等文学作品' },
       { id: '2', name: '科技', description: '科学技术类图书' },
@@ -262,11 +265,11 @@ export const useBooksStore = defineStore('books', () => {
     categories.value = mockCategories
   }
 
-/**
-   * 搜索图书函数
-   * 根据关键词搜索图书，更新搜索状态
-   * @param query - 搜索关键词
-   */
+  /**
+     * 搜索图书函数
+     * 根据关键词搜索图书，更新搜索状态
+     * @param query - 搜索关键词
+     */
   async function searchBooks(query: string) {
     // 更新搜索关键词
     searchQuery.value = query
@@ -275,11 +278,29 @@ export const useBooksStore = defineStore('books', () => {
     error.value = null
 
     try {
-      // 模拟API调用延迟
-      await new Promise(resolve => setTimeout(resolve, 500))
-      // 实际过滤逻辑在filteredBooks计算属性中自动执行
+      const normalizedQuery = query.trim()
+      if (!normalizedQuery) {
+        remoteBooks.value = null
+        return
+      }
+
+      const response = await fetch(`${API_BASE_URL}/books/search?q=${encodeURIComponent(normalizedQuery)}`)
+      if (!response.ok) {
+        throw new Error('后端搜索失败')
+      }
+
+      remoteBooks.value = await response.json()
     } catch (err) {
-      error.value = '搜索失败，请重试'
+      const localQuery = query.trim().toLowerCase()
+      remoteBooks.value = localQuery
+        ? books.value.filter(book =>
+          book.title.toLowerCase().includes(localQuery) ||
+          book.author.toLowerCase().includes(localQuery) ||
+          book.isbn.includes(localQuery) ||
+          book.description.toLowerCase().includes(localQuery)
+        )
+        : null
+      error.value = '搜索服务暂时不可用，已切换到本地检索'
     } finally {
       // 重置加载状态
       isLoading.value = false
@@ -342,17 +363,19 @@ export const useBooksStore = defineStore('books', () => {
     }
   }
 
-/**
-   * 初始化函数
-   * 生成并加载模拟图书数据
-   */
+  /**
+     * 初始化函数
+     * 生成并加载模拟图书数据
+     */
   function initialize() {
     generateMockBooks()
+    remoteBooks.value = null
   }
 
   return {
     // 状态导出
     books,              // 图书列表
+    remoteBooks,        // 后端检索结果
     categories,         // 分类列表
     isLoading,          // 加载状态
     error,              // 错误信息

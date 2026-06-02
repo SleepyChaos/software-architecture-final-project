@@ -7,36 +7,24 @@
           <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <Search class="h-5 w-5 text-gray-400" />
           </div>
-          <input
-            v-model="searchValue"
-            type="text"
-            placeholder="搜索书名、作者或ISBN..."
+          <input v-model="searchValue" type="text" placeholder="搜索书名、作者或ISBN..."
             class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-            @input="handleSearch"
-            @keyup.enter="handleSearchEnter"
-          >
+            @input="handleSearch" @keyup.enter="handleSearchEnter">
           <!-- 清除按钮 -->
-          <button
-            v-if="searchValue"
-            @click="clearSearch"
-            class="absolute inset-y-0 right-0 pr-3 flex items-center"
-          >
+          <button v-if="searchValue" @click="clearSearch" class="absolute inset-y-0 right-0 pr-3 flex items-center">
             <X class="h-4 w-4 text-gray-400 hover:text-gray-600" />
           </button>
         </div>
-        
+
         <!-- 扫一扫按钮（已移除，提高搜索专注度） -->
       </div>
-      
+
       <!-- 搜索建议 -->
-      <div v-if="showSuggestions && suggestions.length > 0" class="mt-2 bg-white border border-gray-200 rounded-lg shadow-lg">
+      <div v-if="showSuggestions && suggestions.length > 0"
+        class="mt-2 bg-white border border-gray-200 rounded-lg shadow-lg">
         <ul class="py-1">
-          <li
-            v-for="(suggestion, index) in suggestions"
-            :key="index"
-            @click="selectSuggestion(suggestion)"
-            class="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-          >
+          <li v-for="(suggestion, index) in suggestions" :key="index" @click="selectSuggestion(suggestion)"
+            class="px-4 py-2 hover:bg-gray-100 cursor-pointer">
             {{ suggestion }}
           </li>
         </ul>
@@ -54,7 +42,7 @@ import { debounce } from '@/utils'
 
 const router = useRouter()
 const booksStore = useBooksStore()
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 const defaultSuggestions = ['深入理解计算机系统', '算法导论', '红楼梦', '活着', '人工智能', '数据结构']
 
 // 状态

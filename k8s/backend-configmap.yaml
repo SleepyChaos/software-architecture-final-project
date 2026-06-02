@@ -5,6 +5,8 @@ metadata:
 data:
   DATABASE_URL: postgresql://library:library@library-postgres:5432/library
   REDIS_URL: redis://library-redis:6379/0
+  ELASTICSEARCH_URL: http://library-elasticsearch:9200
+  RABBITMQ_URL: amqp://guest:guest@library-rabbitmq:5672/%2F
   CACHE_TTL_RECOMMENDED: "300"
   CACHE_TTL_SUGGESTIONS: "180"
   PYTHONPATH: /app

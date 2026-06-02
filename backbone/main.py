@@ -1,14 +1,18 @@
 # 导入FastAPI框架的核心组件
 import json
 import os
+import time
 
-from fastapi import FastAPI, Depends, HTTPException, Query, status  # FastAPI主要依赖项
+from fastapi import FastAPI, Depends, HTTPException, Query, Response, status  # FastAPI主要依赖项
 from fastapi.middleware.cors import CORSMiddleware  # CORS中间件，用于处理跨域请求
 from redis import Redis
 from redis.exceptions import RedisError
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from sqlalchemy.orm import Session  # SQLAlchemy的数据库会话类型
 import models, schemas, database  # 导入本地模块
-from mock_data import BOOKS, DEFAULT_SUGGESTIONS
+from mock_data import DEFAULT_SUGGESTIONS
+from message_queue import is_rabbitmq_available, publish_event
+from search_index import ensure_index, get_elasticsearch_client, search_books, suggest_books
 
 # 创建数据库表
 # 在应用启动时，检查并创建所有定义在 models 中的表
@@ -19,6 +23,24 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
 CACHE_TTL_RECOMMENDED = int(os.getenv("CACHE_TTL_RECOMMENDED", "300"))
 CACHE_TTL_SUGGESTIONS = int(os.getenv("CACHE_TTL_SUGGESTIONS", "180"))
 _redis_client = None
+
+HTTP_REQUEST_COUNT = Counter(
+    "library_http_requests_total",
+    "Total HTTP requests received by the backend",
+    ["method", "endpoint", "status"],
+)
+
+HTTP_REQUEST_LATENCY = Histogram(
+    "library_http_request_duration_seconds",
+    "HTTP request latency in seconds",
+    ["method", "endpoint"],
+)
+
+CACHE_OPERATION_COUNT = Counter(
+    "library_cache_operations_total",
+    "Cache operations in the backend",
+    ["cache_name", "operation"],
+)
 
 # 创建FastAPI应用实例
 # title参数设置API文档的标题
@@ -38,6 +60,29 @@ app.add_middleware(
     allow_methods=["*"],  # 允许所有HTTP方法（GET, POST, PUT, DELETE等）
     allow_headers=["*"],  # 允许所有请求头
 )
+
+
+@app.middleware("http")
+async def prometheus_metrics_middleware(request, call_next):
+    start_time = time.perf_counter()
+    route = request.scope.get("route")
+    endpoint = getattr(route, "path", request.url.path)
+    status_code = 500
+
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        HTTP_REQUEST_COUNT.labels(
+            method=request.method,
+            endpoint=endpoint,
+            status=str(status_code),
+        ).inc()
+        HTTP_REQUEST_LATENCY.labels(
+            method=request.method,
+            endpoint=endpoint,
+        ).observe(time.perf_counter() - start_time)
 
 
 def get_redis_client():
@@ -71,8 +116,14 @@ def read_cache(key: str):
 
     try:
         payload = client.get(key)
-        return json.loads(payload) if payload else None
+        if payload:
+            CACHE_OPERATION_COUNT.labels(cache_name="redis", operation="hit").inc()
+            return json.loads(payload)
+
+        CACHE_OPERATION_COUNT.labels(cache_name="redis", operation="miss").inc()
+        return None
     except (RedisError, TypeError, json.JSONDecodeError):
+        CACHE_OPERATION_COUNT.labels(cache_name="redis", operation="error").inc()
         return None
 
 
@@ -83,7 +134,9 @@ def write_cache(key: str, value, ttl: int):
 
     try:
         client.setex(key, ttl, json.dumps(value, ensure_ascii=False))
+        CACHE_OPERATION_COUNT.labels(cache_name="redis", operation="store").inc()
     except RedisError:
+        CACHE_OPERATION_COUNT.labels(cache_name="redis", operation="error").inc()
         return
 
 
@@ -98,26 +151,7 @@ def get_search_suggestions(query: str):
     """
     根据关键词生成搜索建议。
     """
-    if not query:
-        return DEFAULT_SUGGESTIONS
-
-    normalized_query = query.strip().lower()
-    if not normalized_query:
-        return DEFAULT_SUGGESTIONS
-
-    results = []
-    for book in BOOKS:
-        candidates = [book["title"], book["author"], book["isbn"]]
-        if any(normalized_query in str(item).lower() for item in candidates):
-            results.append(book["title"])
-
-    suggestions = results + [item for item in DEFAULT_SUGGESTIONS if normalized_query in item.lower()]
-    deduplicated = []
-    for item in suggestions:
-        if item not in deduplicated:
-            deduplicated.append(item)
-
-    return deduplicated[:6]
+    return suggest_books(query)
 
 # 依赖注入函数
 # 这个函数用于FastAPI的依赖注入系统，提供数据库会话
@@ -162,6 +196,11 @@ def startup_event():
         if created_users:
             db.commit()
             print(f"初始化：已创建演示用户 {created_users}")
+
+        if ensure_index():
+            print("初始化：Elasticsearch 图书索引已准备好")
+        else:
+            print("初始化：Elasticsearch 不可用，搜索将使用本地回退逻辑")
     
     # finally块确保无论是否发生异常都会执行
     finally:
@@ -193,11 +232,24 @@ def login(user_data: schemas.UserLogin, db: Session = Depends(database.get_db)):
     # user.password != user_data.password: 检查密码是否匹配
     # 注意：实际生产环境中密码应该加密存储（如使用 bcrypt），这里仅作演示使用明文
     if not user or user.password != user_data.password:
+        publish_event(
+            "auth.login_failed",
+            {
+                "reader_id": user_data.reader_id,
+            },
+        )
         # 如果验证失败，抛出HTTP异常
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,  # 401未授权状态码
             detail="用户名或密码错误",  # 错误详细信息
         )
+
+    publish_event(
+        "auth.login_success",
+        {
+            "reader_id": user.reader_id,
+        },
+    )
     
     # 登录成功，返回用户信息
     # FastAPI会自动使用response_model参数指定的模型进行序列化
@@ -229,12 +281,87 @@ def search_suggestions(q: str = Query(default="", description="搜索关键词")
     return suggestions
 
 
+@app.get("/books/search")
+def search_books_api(
+    q: str = Query(default="", description="搜索关键词"),
+    category: str | None = Query(default=None, description="分类过滤"),
+    only_available: bool = Query(default=False, description="仅看可借"),
+    limit: int = Query(default=12, ge=1, le=20, description="返回数量"),
+):
+    cache_key = f"books:search:{q.strip().lower() or 'default'}:{category or 'all'}:{'available' if only_available else 'all'}:{limit}"
+    cached = read_cache(cache_key)
+    if cached is not None:
+        publish_event(
+            "search.books",
+            {
+                "query": q,
+                "category": category,
+                "only_available": only_available,
+                "result_count": len(cached),
+            },
+        )
+        return cached
+
+    results = search_books(
+        query=q,
+        category=category,
+        only_available=only_available,
+        limit=limit,
+    )
+    write_cache(cache_key, results, CACHE_TTL_RECOMMENDED)
+    publish_event(
+        "search.books",
+        {
+            "query": q,
+            "category": category,
+            "only_available": only_available,
+            "result_count": len(results),
+        },
+    )
+    return results
+
+
 @app.get("/healthz")
 def healthz():
     return {
         "status": "ok",
         "redis": "up" if get_redis_client() is not None else "degraded",
+        "elasticsearch": "up" if get_elasticsearch_client() is not None else "degraded",
+        "rabbitmq": "up" if is_rabbitmq_available() else "degraded",
     }
+
+
+@app.get("/analytics/search-trends")
+def search_trends(limit: int = Query(default=10, ge=1, le=20, description="返回数量")):
+    client = get_redis_client()
+    if client is None:
+        return [
+            {"term": suggestion, "count": 0}
+            for suggestion in DEFAULT_SUGGESTIONS[:limit]
+        ]
+
+    try:
+        trends = client.zrevrange("analytics:search_terms", 0, limit - 1, withscores=True)
+        if trends:
+            return [
+                {"term": term, "count": int(score)}
+                for term, score in trends
+            ]
+    except RedisError:
+        pass
+
+    return [
+        {"term": suggestion, "count": 0}
+        for suggestion in DEFAULT_SUGGESTIONS[:limit]
+    ]
+
+
+@app.get("/metrics")
+def metrics():
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
+    )
 
 # 根路由
 # 用于测试服务是否正常运行

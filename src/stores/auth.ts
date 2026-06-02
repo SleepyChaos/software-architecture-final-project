@@ -6,7 +6,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 /**
  * 用户数据接口定义
@@ -33,13 +33,13 @@ export const useAuthStore = defineStore('auth', () => {
   // 计算属性：判断用户是否已认证
   const isAuthenticated = computed(() => !!user.value)
 
-/**
-   * 用户登录函数
-   * 调用后端API验证用户凭据并设置用户信息
-   * @param studentId - 学号/读者证号
-   * @param password - 用户密码
-   * @returns 登录是否成功
-   */
+  /**
+     * 用户登录函数
+     * 调用后端API验证用户凭据并设置用户信息
+     * @param studentId - 学号/读者证号
+     * @param password - 用户密码
+     * @returns 登录是否成功
+     */
   async function login(studentId: string, password: string): Promise<boolean> {
     // 设置加载状态和重置错误信息
     isLoading.value = true
@@ -85,10 +85,10 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-/**
-   * 用户登出函数
-   * 清除当前用户信息和本地存储
-   */
+  /**
+     * 用户登出函数
+     * 清除当前用户信息和本地存储
+     */
   function logout() {
     // 重置用户状态
     user.value = null
