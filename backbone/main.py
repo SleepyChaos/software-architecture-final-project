@@ -1,5 +1,6 @@
 # 导入FastAPI框架的核心组件
 import json
+import os
 import time
 from datetime import timedelta
 
@@ -428,7 +429,10 @@ def search_books_api(
     only_available: bool = Query(default=False, description="仅看可借"),
     limit: int = Query(default=12, ge=1, le=20, description="返回数量"),
 ):
-    cache_key = f"books:search:{q.strip().lower() or 'default'}:{category or 'all'}:{'available' if only_available else 'all'}:{limit}"
+    cache_key = (
+        f"books:search:{q.strip().lower() or 'default'}:"
+        f"{category or 'all'}:{'available' if only_available else 'all'}:{limit}"
+    )
 
     try:
         @redis_breaker
