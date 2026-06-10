@@ -173,7 +173,7 @@ jobs:
 
       - name: Start services with Docker Compose
         run: |
-          docker compose up -d postgres redis rabbitmq elasticsearch backend
+          docker compose up -d db redis rabbitmq elasticsearch backend
           echo "等待服务启动..."
           sleep 15
 
