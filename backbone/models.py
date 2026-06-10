@@ -22,10 +22,9 @@ class User(Base):
     # comment="读者号码"是数据库列注释
     reader_id = Column(String, primary_key=True, index=True, comment="读者号码")
 
-    # password: 密码，字符串类型
+    # hashed_password: 加密后的密码，字符串类型
     # nullable=False表示这个字段不能为空
-    # 在实际生产环境中，密码应该加密存储，这里为了演示使用明文存储
-    password = Column(String, nullable=False, comment="密码")
+    hashed_password = Column(String, nullable=False, comment="加密后的密码")
 
     def __repr__(self):
         """

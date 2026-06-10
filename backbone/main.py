@@ -1,7 +1,7 @@
 # 导入FastAPI框架的核心组件
 import json
-import os
 import time
+from datetime import timedelta
 
 from fastapi import FastAPI, Depends, HTTPException, Query, Response, status  # FastAPI主要依赖项
 from fastapi.middleware.cors import CORSMiddleware  # CORS中间件，用于处理跨域请求
@@ -15,10 +15,25 @@ import database
 from mock_data import BOOKS, DEFAULT_SUGGESTIONS
 from message_queue import is_rabbitmq_available, publish_event
 from search_index import ensure_index, get_elasticsearch_client, search_books, suggest_books
+from auth import (
+    get_password_hash,
+    create_access_token,
+    authenticate_user,
+    get_current_user,
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+)
+from circuit_breaker import (
+    redis_breaker,
+    elasticsearch_breaker,
+    rabbitmq_breaker,
+    get_all_circuit_breaker_states,
+)
+
+# 限流配置
+RATE_LIMIT_MAX_REQUESTS = 100
+RATE_LIMIT_WINDOW_SECONDS = 60
 
 # 创建数据库表
-# 在应用启动时，检查并创建所有定义在 models 中的表
-# 这确保了数据库表结构与模型定义保持同步
 models.Base.metadata.create_all(bind=database.engine)
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
@@ -85,6 +100,21 @@ async def prometheus_metrics_middleware(request, call_next):
             method=request.method,
             endpoint=endpoint,
         ).observe(time.perf_counter() - start_time)
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request, call_next):
+    client_ip = request.client.host if request.client else "unknown"
+
+    if is_rate_limited(client_ip):
+        return Response(
+            content=json.dumps({"error": "请求过于频繁，请稍后再试"}),
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            media_type="application/json",
+        )
+
+    response = await call_next(request)
+    return response
 
 
 def get_redis_client():
@@ -178,7 +208,6 @@ def startup_event():
     应用启动时的初始化操作
     这里我们预置一个测试用户，方便测试登录功能
     """
-    # 创建数据库会话
     db = database.SessionLocal()
     try:
         seed_users = [
@@ -195,7 +224,7 @@ def startup_event():
             db.add(
                 models.User(
                     reader_id=reader_id,
-                    password=password,
+                    hashed_password=get_password_hash(password),
                 )
             )
             created_users.append(reader_id)
@@ -204,75 +233,154 @@ def startup_event():
             db.commit()
             print(f"初始化：已创建演示用户 {created_users}")
 
-        if ensure_index():
-            print("初始化：Elasticsearch 图书索引已准备好")
-        else:
-            print("初始化：Elasticsearch 不可用，搜索将使用本地回退逻辑")
+        try:
+            @elasticsearch_breaker
+            def init_es():
+                return ensure_index()
 
-    # finally块确保无论是否发生异常都会执行
+            if init_es():
+                print("初始化：Elasticsearch 图书索引已准备好")
+            else:
+                print("初始化：Elasticsearch 不可用，搜索将使用本地回退逻辑")
+        except Exception as e:
+            print(f"初始化：Elasticsearch 熔断触发，{e}")
+
     finally:
-        # 关闭数据库会话，释放资源
         db.close()
 
 
-# 用户登录接口
-# 使用POST方法接收用户登录凭据
-# response_model参数指定响应数据的模型
-@app.post("/login", response_model=schemas.UserResponse)
-def login(user_data: schemas.UserLogin, db: Session = Depends(database.get_db)):
+def is_rate_limited(client_ip: str) -> bool:
     """
-    用户登录接口
+    检查客户端是否超过限流阈值
+    """
+    client = get_redis_client()
+    if client is None:
+        return False
+
+    try:
+        key = f"ratelimit:{client_ip}"
+        current = client.incr(key)
+        if current == 1:
+            client.expire(key, RATE_LIMIT_WINDOW_SECONDS)
+        return current > RATE_LIMIT_MAX_REQUESTS
+    except RedisError:
+        return False
+
+
+# 用户登录接口
+@app.post("/login")
+def login(
+    user_data: schemas.UserLogin,
+    db: Session = Depends(database.get_db),
+):
+    """
+    用户登录接口，返回JWT访问令牌
 
     参数:
     - user_data: 包含 reader_id 和 password 的请求体
     - db: 数据库会话，由FastAPI自动注入
 
     返回:
-    - 登录成功返回用户信息
+    - 登录成功返回 access_token 和 token_type
     - 登录失败抛出 401 异常
     """
-    # 在数据库中查找对应 reader_id 的用户
-    # filter()方法添加查询条件，first()方法获取第一条匹配的记录
-    user = db.query(models.User).filter(models.User.reader_id == user_data.reader_id).first()
+    user = authenticate_user(db, user_data.reader_id, user_data.password)
+    if not user:
+        try:
+            @rabbitmq_breaker
+            def publish_login_failed():
+                publish_event(
+                    "auth.login_failed",
+                    {"reader_id": user_data.reader_id},
+                )
 
-    # 验证用户是否存在以及密码是否匹配
-    # not user: 检查用户是否存在
-    # user.password != user_data.password: 检查密码是否匹配
-    # 注意：实际生产环境中密码应该加密存储（如使用 bcrypt），这里仅作演示使用明文
-    if not user or user.password != user_data.password:
-        publish_event(
-            "auth.login_failed",
-            {
-                "reader_id": user_data.reader_id,
-            },
-        )
-        # 如果验证失败，抛出HTTP异常
+            publish_login_failed()
+        except Exception:
+            pass
+
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,  # 401未授权状态码
-            detail="用户名或密码错误",  # 错误详细信息
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户名或密码错误",
         )
 
-    publish_event(
-        "auth.login_success",
-        {
-            "reader_id": user.reader_id,
-        },
+    try:
+        @rabbitmq_breaker
+        def publish_login_success():
+            publish_event(
+                "auth.login_success",
+                {"reader_id": user.reader_id},
+            )
+
+        publish_login_success()
+    except Exception:
+        pass
+
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.reader_id}, expires_delta=access_token_expires
     )
 
-    # 登录成功，返回用户信息
-    # FastAPI会自动使用response_model参数指定的模型进行序列化
-    return user
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+@app.post("/token")
+def login_for_access_token(
+    user_data: schemas.UserLogin,
+    db: Session = Depends(database.get_db),
+):
+    """
+    OAuth2 token 端点，用于获取访问令牌
+    """
+    user = authenticate_user(db, user_data.reader_id, user_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户名或密码错误",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.reader_id}, expires_delta=access_token_expires
+    )
+
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+@app.get("/users/me/", response_model=schemas.UserResponse)
+async def read_users_me(current_user: models.User = Depends(get_current_user)):
+    """
+    获取当前登录用户信息（需要认证）
+    """
+    return current_user
 
 
 @app.get("/books/recommended")
 def recommended_books():
     cache_key = "books:recommended"
-    cached = read_cache(cache_key)
-    if cached is not None:
-        return cached
+
+    try:
+        @redis_breaker
+        def get_cached():
+            return read_cache(cache_key)
+
+        cached = get_cached()
+        if cached is not None:
+            return cached
+    except Exception:
+        pass
 
     data = get_recommended_books()
-    write_cache(cache_key, data, CACHE_TTL_RECOMMENDED)
+
+    try:
+        @redis_breaker
+        def set_cache():
+            write_cache(cache_key, data, CACHE_TTL_RECOMMENDED)
+
+        set_cache()
+    except Exception:
+        pass
+
     return data
 
 
@@ -280,12 +388,36 @@ def recommended_books():
 def search_suggestions(q: str = Query(default="", description="搜索关键词")):
     normalized_query = q.strip().lower()
     cache_key = f"search:suggestions:{normalized_query or 'default'}"
-    cached = read_cache(cache_key)
-    if cached is not None:
-        return cached
 
-    suggestions = get_search_suggestions(q)
-    write_cache(cache_key, suggestions, CACHE_TTL_SUGGESTIONS)
+    try:
+        @redis_breaker
+        def get_cached():
+            return read_cache(cache_key)
+
+        cached = get_cached()
+        if cached is not None:
+            return cached
+    except Exception:
+        pass
+
+    try:
+        @elasticsearch_breaker
+        def search():
+            return get_search_suggestions(q)
+
+        suggestions = search()
+    except Exception:
+        suggestions = suggest_books(q)
+
+    try:
+        @redis_breaker
+        def set_cache():
+            write_cache(cache_key, suggestions, CACHE_TTL_SUGGESTIONS)
+
+        set_cache()
+    except Exception:
+        pass
+
     return suggestions
 
 
@@ -297,35 +429,79 @@ def search_books_api(
     limit: int = Query(default=12, ge=1, le=20, description="返回数量"),
 ):
     cache_key = f"books:search:{q.strip().lower() or 'default'}:{category or 'all'}:{'available' if only_available else 'all'}:{limit}"
-    cached = read_cache(cache_key)
-    if cached is not None:
-        publish_event(
-            "search.books",
-            {
-                "query": q,
-                "category": category,
-                "only_available": only_available,
-                "result_count": len(cached),
-            },
-        )
-        return cached
 
-    results = search_books(
-        query=q,
-        category=category,
-        only_available=only_available,
-        limit=limit,
-    )
-    write_cache(cache_key, results, CACHE_TTL_RECOMMENDED)
-    publish_event(
-        "search.books",
-        {
-            "query": q,
-            "category": category,
-            "only_available": only_available,
-            "result_count": len(results),
-        },
-    )
+    try:
+        @redis_breaker
+        def get_cached():
+            return read_cache(cache_key)
+
+        cached = get_cached()
+        if cached is not None:
+            try:
+                @rabbitmq_breaker
+                def publish():
+                    publish_event(
+                        "search.books",
+                        {
+                            "query": q,
+                            "category": category,
+                            "only_available": only_available,
+                            "result_count": len(cached),
+                        },
+                    )
+
+                publish()
+            except Exception:
+                pass
+            return cached
+    except Exception:
+        pass
+
+    try:
+        @elasticsearch_breaker
+        def search():
+            return search_books(
+                query=q,
+                category=category,
+                only_available=only_available,
+                limit=limit,
+            )
+
+        results = search()
+    except Exception:
+        results = search_books(
+            query=q,
+            category=category,
+            only_available=only_available,
+            limit=limit,
+        )
+
+    try:
+        @redis_breaker
+        def set_cache():
+            write_cache(cache_key, results, CACHE_TTL_RECOMMENDED)
+
+        set_cache()
+    except Exception:
+        pass
+
+    try:
+        @rabbitmq_breaker
+        def publish():
+            publish_event(
+                "search.books",
+                {
+                    "query": q,
+                    "category": category,
+                    "only_available": only_available,
+                    "result_count": len(results),
+                },
+            )
+
+        publish()
+    except Exception:
+        pass
+
     return results
 
 
@@ -336,26 +512,34 @@ def healthz():
         "redis": "up" if get_redis_client() is not None else "degraded",
         "elasticsearch": "up" if get_elasticsearch_client() is not None else "degraded",
         "rabbitmq": "up" if is_rabbitmq_available() else "degraded",
+        "circuit_breakers": get_all_circuit_breaker_states(),
     }
 
 
 @app.get("/analytics/search-trends")
 def search_trends(limit: int = Query(default=10, ge=1, le=20, description="返回数量")):
-    client = get_redis_client()
-    if client is None:
-        return [
-            {"term": suggestion, "count": 0}
-            for suggestion in DEFAULT_SUGGESTIONS[:limit]
-        ]
-
     try:
-        trends = client.zrevrange("analytics:search_terms", 0, limit - 1, withscores=True)
-        if trends:
-            return [
-                {"term": term, "count": int(score)}
-                for term, score in trends
-            ]
-    except RedisError:
+        @redis_breaker
+        def get_trends():
+            client = get_redis_client()
+            if client is None:
+                return None
+
+            try:
+                trends = client.zrevrange("analytics:search_terms", 0, limit - 1, withscores=True)
+                if trends:
+                    return [
+                        {"term": term, "count": int(score)}
+                        for term, score in trends
+                    ]
+            except RedisError:
+                return None
+            return None
+
+        trends = get_trends()
+        if trends is not None:
+            return trends
+    except Exception:
         pass
 
     return [
