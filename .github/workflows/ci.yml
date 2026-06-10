@@ -1,0 +1,529 @@
+# =============================================================================
+# 图书管理系统 - CI/CD 流水线
+# =============================================================================
+# 覆盖范围：
+#   1. 前端 - ESLint 检查、TypeScript 类型检查、Vite 构建
+#   2. 后端 - Python 语法检查、依赖安装验证
+#   3. 后端测试 - 单元测试、API 功能测试、集成测试
+#   4. Docker - 前端/后端镜像构建
+#   5. Docker Compose - 全服务编排构建验证
+#   6. Kubernetes - 清单 YAML 语法校验
+# =============================================================================
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master]
+
+env:
+  NODE_VERSION: "20"
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: 前端检查与构建
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: Frontend - Lint, Type Check & Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint check
+        run: npm run lint
+
+      - name: TypeScript type check
+        run: npm run check
+
+      - name: Vite build
+        run: npm run build
+
+      - name: Verify build output
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "::error::dist 目录不存在，构建可能失败"
+            exit 1
+          fi
+          echo "构建产物："
+          ls -lh dist/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist/
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Job 2: 后端检查
+  # ---------------------------------------------------------------------------
+  backend:
+    name: Backend - Python Lint & Dependency Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backbone/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r backbone/requirements.txt
+
+      - name: Install lint tools
+        run: pip install flake8
+
+      - name: Python syntax check (py_compile)
+        run: |
+          python -m compileall -q backbone/
+          echo "所有 Python 文件语法检查通过"
+
+      - name: Flake8 lint
+        run: |
+          flake8 backbone/ \
+            --max-line-length=120 \
+            --ignore=E501,W503,E402 \
+            --statistics \
+            --count
+
+      - name: Verify imports
+        run: |
+          cd backbone
+          python -c "
+          import fastapi
+          import uvicorn
+          import sqlalchemy
+          import pydantic
+          import redis
+          import prometheus_client
+          import elasticsearch
+          import pika
+          print('所有核心依赖导入成功')
+          "
+
+  # ---------------------------------------------------------------------------
+  # Job 2.5: 后端测试 - 单元测试 + API 功能测试
+  # ---------------------------------------------------------------------------
+  backend-tests:
+    name: Backend Tests - Unit & API
+    runs-on: ubuntu-latest
+    needs: backend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backbone/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r backbone/requirements.txt
+
+      - name: Run unit tests
+        run: |
+          cd backbone
+          python -m pytest tests/ -m unit -v --tb=short
+
+      - name: Run API functional tests
+        run: |
+          cd backbone
+          python -m pytest tests/ -m api -v --tb=short
+
+  # ---------------------------------------------------------------------------
+  # Job 2.6: 集成测试（Docker Compose 服务）
+  # ---------------------------------------------------------------------------
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: backend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (for frontend build)
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install frontend deps & build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Start services with Docker Compose
+        run: |
+          docker compose up -d postgres redis rabbitmq elasticsearch backend
+          echo "等待服务启动..."
+          sleep 15
+
+      - name: Wait for backend ready
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/ > /dev/null 2>&1; then
+              echo "后端服务已就绪 (${i}s)"
+              break
+            fi
+            echo "等待后端启动... (${i}/30)"
+            sleep 2
+          done
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backbone/requirements.txt
+
+      - name: Install test dependencies
+        run: pip install -r backbone/requirements.txt
+
+      - name: Run integration tests
+        env:
+          INTEGRATION_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/library
+          INTEGRATION_REDIS_HOST: localhost
+          INTEGRATION_RABBITMQ_HOST: localhost
+          LOAD_TEST_BACKEND_URL: http://localhost:8000
+        run: |
+          cd backbone
+          python -m pytest tests/ -m integration -v --tb=short
+
+      - name: Run load tests
+        env:
+          LOAD_TEST_BACKEND_URL: http://localhost:8000
+        run: |
+          cd backbone
+          python -m pytest tests/ -m load -v --tb=short
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v
+
+  # ---------------------------------------------------------------------------
+  # Job 3: Docker 镜像构建 - 前端
+  # ---------------------------------------------------------------------------
+  docker-frontend:
+    name: Docker - Frontend Image Build
+    runs-on: ubuntu-latest
+    needs: frontend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build frontend Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          load: true
+          tags: library-frontend:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify frontend image
+        run: |
+          docker image inspect library-frontend:ci-${{ github.sha }}
+          echo "前端镜像构建成功"
+
+  # ---------------------------------------------------------------------------
+  # Job 4: Docker 镜像构建 - 后端
+  # ---------------------------------------------------------------------------
+  docker-backend:
+    name: Docker - Backend Image Build
+    runs-on: ubuntu-latest
+    needs: backend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backbone/Dockerfile
+          push: false
+          load: true
+          tags: library-backend:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify backend image
+        run: |
+          docker image inspect library-backend:ci-${{ github.sha }}
+          echo "后端镜像构建成功"
+
+  # ---------------------------------------------------------------------------
+  # Job 5: Docker Compose 编排验证
+  # ---------------------------------------------------------------------------
+  docker-compose:
+    name: Docker Compose - Full Stack Build
+    runs-on: ubuntu-latest
+    needs: [docker-frontend, docker-backend]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install frontend deps & build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Validate docker-compose config
+        run: docker compose config --quiet
+
+      - name: Build all services
+        run: docker compose build
+
+      - name: List built images
+        run: docker compose images
+
+  # ---------------------------------------------------------------------------
+  # Job 6: Kubernetes 清单校验
+  # ---------------------------------------------------------------------------
+  k8s-validate:
+    name: Kubernetes - Manifest Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install kubeval
+        run: |
+          # 使用 Python yaml 模块做基础语法校验
+          pip install pyyaml
+
+      - name: Validate K8s YAML syntax
+        run: |
+          python -c "
+          import yaml, sys, os
+
+          k8s_dir = 'k8s'
+          errors = []
+          files = [f for f in os.listdir(k8s_dir) if f.endswith(('.yaml', '.yml'))]
+
+          for filename in sorted(files):
+              filepath = os.path.join(k8s_dir, filename)
+              try:
+                  with open(filepath) as f:
+                      docs = list(yaml.safe_load_all(f))
+                  for doc in docs:
+                      if doc and 'kind' not in doc:
+                          errors.append(f'{filename}: 缺少 kind 字段')
+                      if doc and 'apiVersion' not in doc:
+                          errors.append(f'{filename}: 缺少 apiVersion 字段')
+                  print(f'  OK  {filename} ({len(docs)} document(s))')
+              except yaml.YAMLError as e:
+                  errors.append(f'{filename}: YAML 解析错误 - {e}')
+
+          if errors:
+              print()
+              for err in errors:
+                  print(f'  FAIL  {err}')
+              sys.exit(1)
+
+          print(f'\n共校验 {len(files)} 个 Kubernetes 清单文件，全部通过')
+          "
+
+      - name: Check required K8s resources
+        run: |
+          python -c "
+          import yaml, os
+
+          k8s_dir = 'k8s'
+          resources = {}
+          for filename in os.listdir(k8s_dir):
+              if not filename.endswith(('.yaml', '.yml')):
+                  continue
+              with open(os.path.join(k8s_dir, filename)) as f:
+                  for doc in yaml.safe_load_all(f):
+                      if doc:
+                          kind = doc.get('kind', 'Unknown')
+                          name = doc.get('metadata', {}).get('name', 'unnamed')
+                          resources.setdefault(kind, []).append(name)
+
+          print('检测到的 Kubernetes 资源：')
+          for kind, names in sorted(resources.items()):
+              for name in names:
+                  print(f'  {kind}: {name}')
+          "
+
+  # ---------------------------------------------------------------------------
+  # Job 7: Prometheus 配置校验
+  # ---------------------------------------------------------------------------
+  prometheus-validate:
+    name: Prometheus - Config Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate prometheus.yml
+        run: |
+          pip install pyyaml
+          python -c "
+          import yaml, sys
+
+          try:
+              with open('prometheus.yml') as f:
+                  config = yaml.safe_load(f)
+
+              assert 'global' in config, '缺少 global 配置'
+              assert 'scrape_configs' in config, '缺少 scrape_configs 配置'
+
+              print('global 配置:')
+              for k, v in config['global'].items():
+                  print(f'  {k}: {v}')
+
+              print(f'scrape_configs: {len(config[\"scrape_configs\"])} 个抓取任务')
+              for job in config['scrape_configs']:
+                  print(f'  - {job.get(\"job_name\", \"unnamed\")}')
+
+              print('\nPrometheus 配置校验通过')
+          except Exception as e:
+              print(f'Prometheus 配置校验失败: {e}')
+              sys.exit(1)
+          "
+
+  # ---------------------------------------------------------------------------
+  # Job 8: Nginx 配置校验
+  # ---------------------------------------------------------------------------
+  nginx-validate:
+    name: Nginx - Config Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate nginx.conf syntax
+        run: |
+          # 基础语法检查：确保关键指令存在
+          python -c "
+          import sys
+
+          with open('nginx.conf') as f:
+              content = f.read()
+
+          required_directives = [
+              'upstream',
+              'server',
+              'listen',
+              'location',
+              'proxy_pass',
+              'try_files',
+          ]
+
+          missing = [d for d in required_directives if d not in content]
+          if missing:
+              print(f'nginx.conf 缺少关键指令: {missing}')
+              sys.exit(1)
+
+          # 检查大括号匹配
+          open_count = content.count('{')
+          close_count = content.count('}')
+          if open_count != close_count:
+              print(f'nginx.conf 大括号不匹配: {{ = {open_count}, }} = {close_count}')
+              sys.exit(1)
+
+          print('nginx.conf 基础语法校验通过')
+          print(f'  upstream 块: {content.count(\"upstream\")} 个')
+          print(f'  server 块: {content.count(\"server\")} 个')
+          print(f'  location 块: {content.count(\"location\")} 个')
+          "
+
+  # ---------------------------------------------------------------------------
+  # Summary: 流水线状态汇总
+  # ---------------------------------------------------------------------------
+  summary:
+    name: Pipeline Summary
+    runs-on: ubuntu-latest
+    needs:
+      - frontend
+      - backend
+      - backend-tests
+      - integration-tests
+      - docker-frontend
+      - docker-backend
+      - docker-compose
+      - k8s-validate
+      - prometheus-validate
+      - nginx-validate
+    if: always()
+    steps:
+      - name: Check all jobs status
+        run: |
+          echo "=============================="
+          echo "  CI/CD Pipeline Summary"
+          echo "=============================="
+          echo "Frontend:          ${{ needs.frontend.result }}"
+          echo "Backend:           ${{ needs.backend.result }}"
+          echo "Backend Tests:     ${{ needs.backend-tests.result }}"
+          echo "Integration Tests: ${{ needs.integration-tests.result }}"
+          echo "Docker Frontend:   ${{ needs.docker-frontend.result }}"
+          echo "Docker Backend:    ${{ needs.docker-backend.result }}"
+          echo "Docker Compose:    ${{ needs.docker-compose.result }}"
+          echo "K8s Validate:      ${{ needs.k8s-validate.result }}"
+          echo "Prometheus:        ${{ needs.prometheus-validate.result }}"
+          echo "Nginx:             ${{ needs.nginx-validate.result }}"
+          echo "=============================="
+
+          # 如果任何关键 job 失败则退出
+          results=(
+            "${{ needs.frontend.result }}"
+            "${{ needs.backend.result }}"
+            "${{ needs.backend-tests.result }}"
+            "${{ needs.integration-tests.result }}"
+            "${{ needs.docker-frontend.result }}"
+            "${{ needs.docker-backend.result }}"
+            "${{ needs.docker-compose.result }}"
+            "${{ needs.k8s-validate.result }}"
+            "${{ needs.prometheus-validate.result }}"
+            "${{ needs.nginx-validate.result }}"
+          )
+
+          for result in "${results[@]}"; do
+            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+              echo "流水线存在失败或取消的任务"
+              exit 1
+            fi
+          done
+
+          echo "所有检查通过！"

@@ -10,7 +10,7 @@ from redis.exceptions import RedisError
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from sqlalchemy.orm import Session  # SQLAlchemy的数据库会话类型
 import models, schemas, database  # 导入本地模块
-from mock_data import DEFAULT_SUGGESTIONS
+from mock_data import BOOKS, DEFAULT_SUGGESTIONS
 from message_queue import is_rabbitmq_available, publish_event
 from search_index import ensure_index, get_elasticsearch_client, search_books, suggest_books
 
