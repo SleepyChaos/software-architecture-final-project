@@ -1,6 +1,7 @@
 # 从SQLAlchemy导入列类型和数据库基类
-from sqlalchemy import Column, String, Integer  # Column定义列，String和Integer定义数据类型
+from sqlalchemy import Column, String  # Column定义列，String定义数据类型
 from database import Base  # 从database模块导入Base基类
+
 
 class User(Base):
     """
@@ -20,7 +21,7 @@ class User(Base):
     # index=True创建索引以提高查询性能
     # comment="读者号码"是数据库列注释
     reader_id = Column(String, primary_key=True, index=True, comment="读者号码")
-    
+
     # password: 密码，字符串类型
     # nullable=False表示这个字段不能为空
     # 在实际生产环境中，密码应该加密存储，这里为了演示使用明文存储

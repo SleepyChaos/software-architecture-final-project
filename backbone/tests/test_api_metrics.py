@@ -60,7 +60,7 @@ class TestApiMetrics:
         resp = client.get("/metrics")
         body = resp.text
         # Prometheus 文本格式每行通常是 metric_name{labels} value 形式
-        lines = [l for l in body.split("\n") if l and not l.startswith("#")]
+        lines = [line for line in body.split("\n") if line and not line.startswith("#")]
         assert len(lines) > 0
         logger.info(f"指标输出为文本格式，共 {len(lines)} 行数据")
 

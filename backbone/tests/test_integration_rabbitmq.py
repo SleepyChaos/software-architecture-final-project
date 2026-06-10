@@ -93,8 +93,6 @@ class TestIntegrationRabbitMQ:
 
     def test_message_body_structure(self, rabbitmq_connection):
         """消息体应包含正确结构"""
-        import pika
-
         channel = rabbitmq_connection.channel()
         queue_name = "library.events.test"
         channel.queue_declare(queue=queue_name, durable=False)
@@ -132,7 +130,6 @@ class TestIntegrationRabbitMQ:
         time.sleep(0.5)
 
         # 3. 手动消费消息并调用 handler
-        import pika
         channel = rabbitmq_connection.channel()
         from message_queue import RABBITMQ_QUEUE
 
@@ -159,7 +156,6 @@ class TestIntegrationRabbitMQ:
         from message_queue import publish_event
         from rabbitmq_worker import handle_message
         from unittest.mock import MagicMock
-        import pika
 
         publish_event("auth.login_success", {"reader_id": "int_test_001"})
         time.sleep(0.5)

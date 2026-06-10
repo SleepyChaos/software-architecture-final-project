@@ -6,7 +6,6 @@
 标记为 load，通过 -m load 执行
 """
 
-import json
 import logging
 import os
 import subprocess

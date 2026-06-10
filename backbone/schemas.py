@@ -2,6 +2,7 @@
 # Pydantic是一个数据验证和设置管理库，用于数据验证和序列化
 from pydantic import BaseModel
 
+
 class UserLogin(BaseModel):
     """
     用户登录请求模型
@@ -17,6 +18,7 @@ class UserLogin(BaseModel):
         用于配置模型的行为
         """
         from_attributes = True  # 允许从ORM对象的属性创建模型实例
+
 
 class UserResponse(BaseModel):
     """

@@ -63,7 +63,6 @@ class TestFallbackSearchBasic:
 
     def test_keyword_case_insensitive(self):
         """关键词搜索应大小写不敏感"""
-        results_lower = _fallback_search("csapp", None, False, 20)
         # CSAPP 不在原始数据中，用小写测试
         results_title = _fallback_search("算法", None, False, 20)
         results_title_upper = _fallback_search("算法", None, False, 20)

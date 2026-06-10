@@ -9,7 +9,9 @@ from redis import Redis
 from redis.exceptions import RedisError
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from sqlalchemy.orm import Session  # SQLAlchemy的数据库会话类型
-import models, schemas, database  # 导入本地模块
+import models  # 导入本地模块
+import schemas
+import database
 from mock_data import BOOKS, DEFAULT_SUGGESTIONS
 from message_queue import is_rabbitmq_available, publish_event
 from search_index import ensure_index, get_elasticsearch_client, search_books, suggest_books
@@ -155,6 +157,8 @@ def get_search_suggestions(query: str):
 
 # 依赖注入函数
 # 这个函数用于FastAPI的依赖注入系统，提供数据库会话
+
+
 def get_db():
     """
     获取数据库会话的依赖函数
@@ -163,8 +167,11 @@ def get_db():
     # 调用database模块中的get_db函数，获取数据库会话生成器
     return database.get_db()
 
+
 # 应用启动事件处理函数
 # 这个函数在FastAPI应用启动时自动执行
+
+
 @app.on_event("startup")
 def startup_event():
     """
@@ -201,11 +208,12 @@ def startup_event():
             print("初始化：Elasticsearch 图书索引已准备好")
         else:
             print("初始化：Elasticsearch 不可用，搜索将使用本地回退逻辑")
-    
+
     # finally块确保无论是否发生异常都会执行
     finally:
         # 关闭数据库会话，释放资源
         db.close()
+
 
 # 用户登录接口
 # 使用POST方法接收用户登录凭据
@@ -214,11 +222,11 @@ def startup_event():
 def login(user_data: schemas.UserLogin, db: Session = Depends(database.get_db)):
     """
     用户登录接口
-    
+
     参数:
     - user_data: 包含 reader_id 和 password 的请求体
     - db: 数据库会话，由FastAPI自动注入
-    
+
     返回:
     - 登录成功返回用户信息
     - 登录失败抛出 401 异常
@@ -226,7 +234,7 @@ def login(user_data: schemas.UserLogin, db: Session = Depends(database.get_db)):
     # 在数据库中查找对应 reader_id 的用户
     # filter()方法添加查询条件，first()方法获取第一条匹配的记录
     user = db.query(models.User).filter(models.User.reader_id == user_data.reader_id).first()
-    
+
     # 验证用户是否存在以及密码是否匹配
     # not user: 检查用户是否存在
     # user.password != user_data.password: 检查密码是否匹配
@@ -250,7 +258,7 @@ def login(user_data: schemas.UserLogin, db: Session = Depends(database.get_db)):
             "reader_id": user.reader_id,
         },
     )
-    
+
     # 登录成功，返回用户信息
     # FastAPI会自动使用response_model参数指定的模型进行序列化
     return user
@@ -365,6 +373,8 @@ def metrics():
 
 # 根路由
 # 用于测试服务是否正常运行
+
+
 @app.get("/")
 def read_root():
     """

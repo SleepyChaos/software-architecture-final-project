@@ -4,11 +4,9 @@
 """
 
 import logging
-from unittest.mock import patch
 
 import pytest
 
-import main as main_module
 from models import User
 
 logger = logging.getLogger(__name__)
@@ -22,7 +20,7 @@ def login_user(sqlite_session_factory):
         user = User(reader_id="login001", password="correctpass")
         session.merge(user)
         session.commit()
-        logger.info(f"登录测试用户已创建: reader_id=login001")
+        logger.info("登录测试用户已创建: reader_id=login001")
         yield user
     finally:
         session.close()

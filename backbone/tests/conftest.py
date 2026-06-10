@@ -78,7 +78,6 @@ def test_app(sqlite_engine, sqlite_session_factory):
     from unittest.mock import patch
 
     import database as db_module
-    import models
     import main as main_module
 
     # 替换数据库引擎和会话工厂

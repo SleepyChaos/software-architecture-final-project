@@ -121,7 +121,7 @@ class TestIntegrationElasticsearch:
 
     def test_get_elasticsearch_client_returns_client(self, es_client):
         """get_elasticsearch_client 应返回真实客户端"""
-        from search_index import get_elasticsearch_client, _es_client
+        from search_index import get_elasticsearch_client
         import search_index
 
         # 重置缓存

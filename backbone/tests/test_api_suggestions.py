@@ -7,8 +7,6 @@ import logging
 
 import pytest
 
-from mock_data import DEFAULT_SUGGESTIONS
-
 logger = logging.getLogger(__name__)
 
 

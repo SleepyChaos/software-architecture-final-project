@@ -4,11 +4,8 @@
 """
 
 import logging
-from unittest.mock import patch
 
 import pytest
-
-from mock_data import BOOKS
 
 logger = logging.getLogger(__name__)
 
