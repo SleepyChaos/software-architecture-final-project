@@ -321,7 +321,7 @@ def login(
         data={"sub": user.reader_id}, expires_delta=access_token_expires
     )
 
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer", "reader_id": user.reader_id}
 
 
 @app.post("/token")

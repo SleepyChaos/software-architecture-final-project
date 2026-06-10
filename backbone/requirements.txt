@@ -9,6 +9,7 @@ elasticsearch
 pika
 pyjwt[crypto]
 passlib[bcrypt]
+bcrypt==4.0.1
 pybreaker
 
 # 测试依赖

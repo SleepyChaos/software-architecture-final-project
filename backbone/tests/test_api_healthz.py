@@ -68,9 +68,9 @@ class TestApiHealthz:
         logger.info(f"Content-Type: {resp.headers.get('content-type')}")
 
     def test_all_required_fields(self, client):
-        """响应应包含全部4个字段"""
+        """响应应包含全部5个字段"""
         resp = client.get("/healthz")
         data = resp.json()
-        required = {"status", "redis", "elasticsearch", "rabbitmq"}
+        required = {"status", "redis", "elasticsearch", "rabbitmq", "circuit_breakers"}
         assert required == set(data.keys())
         logger.info(f"响应字段完整: {set(data.keys())}")

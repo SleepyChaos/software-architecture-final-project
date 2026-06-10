@@ -8,6 +8,7 @@ import logging
 import pytest
 
 from models import User
+from auth import get_password_hash
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ def login_user(sqlite_session_factory):
     """通过 SQLite 会话工厂直接插入测试用户（与 TestClient 共享同一数据库）"""
     session = sqlite_session_factory()
     try:
-        user = User(reader_id="login001", password="correctpass")
+        user = User(reader_id="login001", hashed_password=get_password_hash("correctpass"))
         session.merge(user)
         session.commit()
         logger.info("登录测试用户已创建: reader_id=login001")
