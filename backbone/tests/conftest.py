@@ -9,6 +9,21 @@ import sys
 
 import pytest
 
+# ==================== 添加日志配置 ====================
+LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(name)s:%(lineno)d - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[
+        logging.FileHandler(os.path.join(LOG_DIR, "test.log"), encoding="utf-8"),
+        logging.StreamHandler(),  # 同时输出到控制台
+    ],
+)
+# =====================================================
+
 # 将 backbone 目录加入 sys.path，确保 import models/schemas/database 正常工作
 _BACKBONE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _BACKBONE_DIR not in sys.path:
@@ -21,6 +36,41 @@ os.environ.setdefault("ELASTICSEARCH_URL", "http://127.0.0.1:9200")
 os.environ.setdefault("RABBITMQ_URL", "amqp://guest:guest@127.0.0.1:5672/%2F")
 
 logger = logging.getLogger(__name__)
+
+
+LOG_FILE = os.path.join(LOG_DIR, "test.log")
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """自动捕获所有失败测试的异常信息，直接写入 test.log"""
+    import datetime
+    import traceback
+    outcome = yield
+    report = outcome.get_result()
+    if report.failed:
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # 构建详细错误信息
+        error_lines = [
+            f"{timestamp} [ERROR] 测试失败: {item.nodeid}",
+            f"  阶段: {report.when}",
+        ]
+        # 提取异常 traceback
+        if call.excinfo is not None:
+            error_lines.append(f"  异常类型: {call.excinfo.typename}")
+            error_lines.append(f"  异常信息: {call.excinfo.value}")
+            error_lines.append("  Traceback:")
+            tb_lines = traceback.format_tb(call.excinfo.tb)
+            error_lines.extend(f"    {line.rstrip()}" for line in tb_lines)
+        else:
+            error_lines.append(f"  详情: {report.longrepr}")
+        error_lines.append("=" * 80)
+        error_msg = "\n".join(error_lines) + "\n"
+        # 直接写入文件，绕过 pytest 日志捕获
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(error_msg)
+        # 同时通过 logger 输出
+        logger.error("测试失败 [%s]: %s", report.when, item.nodeid)
 
 
 # ---------------------------------------------------------------------------
