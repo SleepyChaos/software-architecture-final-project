@@ -50,21 +50,26 @@ class TestBooksDataIntegrity:
         """可借数量不应超过总数量"""
         for book in BOOKS:
             assert book["availableCopies"] <= book["totalCopies"], (
-                f"'{book['title']}': availableCopies({book['availableCopies']}) "
-                f"> totalCopies({book['totalCopies']})"
+                f"'{book['title']}': availableCopies("
+                f"{book['availableCopies']}) > totalCopies("
+                f"{book['totalCopies']})"
             )
         logger.info("所有图书可借数量 <= 总数量")
 
     def test_available_copies_non_negative(self):
         """可借数量应非负"""
         for book in BOOKS:
-            assert book["availableCopies"] >= 0, f"'{book['title']}': availableCopies < 0"
+            assert book["availableCopies"] >= 0, (
+                f"'{book['title']}': availableCopies < 0"
+            )
         logger.info("所有图书可借数量非负")
 
     def test_total_copies_positive(self):
         """总数量应为正数"""
         for book in BOOKS:
-            assert book["totalCopies"] > 0, f"'{book['title']}': totalCopies <= 0"
+            assert book["totalCopies"] > 0, (
+                f"'{book['title']}': totalCopies <= 0"
+            )
         logger.info("所有图书总数量为正数")
 
     def test_publish_year_reasonable(self):

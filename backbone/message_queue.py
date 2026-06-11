@@ -9,7 +9,10 @@ except ImportError:  # pragma: no cover - 依赖缺失时自动降级
     pika = None
 
 
-RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@127.0.0.1:5672/%2F")
+RABBITMQ_URL = os.getenv(
+    "RABBITMQ_URL",
+    "amqp://guest:guest@127.0.0.1:5672/%2F"
+)
 RABBITMQ_QUEUE = os.getenv("RABBITMQ_QUEUE", "library.events")
 
 

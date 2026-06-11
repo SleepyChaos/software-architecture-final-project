@@ -4,18 +4,35 @@ import os
 import time
 from datetime import timedelta
 
-from fastapi import FastAPI, Depends, HTTPException, Query, Response, status  # FastAPI主要依赖项
-from fastapi.middleware.cors import CORSMiddleware  # CORS中间件，用于处理跨域请求
+from fastapi import (
+    FastAPI,
+    Depends,
+    HTTPException,
+    Query,
+    Response,
+    status,
+)
+from fastapi.middleware.cors import CORSMiddleware
 from redis import Redis
 from redis.exceptions import RedisError
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
-from sqlalchemy.orm import Session  # SQLAlchemy的数据库会话类型
-import models  # 导入本地模块
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    Counter,
+    Histogram,
+    generate_latest,
+)
+from sqlalchemy.orm import Session
+import models
 import schemas
 import database
 from mock_data import BOOKS, DEFAULT_SUGGESTIONS
 from message_queue import is_rabbitmq_available, publish_event
-from search_index import ensure_index, get_elasticsearch_client, search_books, suggest_books
+from search_index import (
+    ensure_index,
+    get_elasticsearch_client,
+    search_books,
+    suggest_books,
+)
 from auth import (
     get_password_hash,
     create_access_token,
@@ -150,13 +167,19 @@ def read_cache(key: str):
     try:
         payload = client.get(key)
         if payload:
-            CACHE_OPERATION_COUNT.labels(cache_name="redis", operation="hit").inc()
+            CACHE_OPERATION_COUNT.labels(
+                cache_name="redis", operation="hit"
+            ).inc()
             return json.loads(payload)
 
-        CACHE_OPERATION_COUNT.labels(cache_name="redis", operation="miss").inc()
+        CACHE_OPERATION_COUNT.labels(
+            cache_name="redis", operation="miss"
+        ).inc()
         return None
     except (RedisError, TypeError, json.JSONDecodeError):
-        CACHE_OPERATION_COUNT.labels(cache_name="redis", operation="error").inc()
+        CACHE_OPERATION_COUNT.labels(
+            cache_name="redis", operation="error"
+        ).inc()
         return None
 
 
@@ -167,9 +190,13 @@ def write_cache(key: str, value, ttl: int):
 
     try:
         client.setex(key, ttl, json.dumps(value, ensure_ascii=False))
-        CACHE_OPERATION_COUNT.labels(cache_name="redis", operation="store").inc()
+        CACHE_OPERATION_COUNT.labels(
+            cache_name="redis", operation="store"
+        ).inc()
     except RedisError:
-        CACHE_OPERATION_COUNT.labels(cache_name="redis", operation="error").inc()
+        CACHE_OPERATION_COUNT.labels(
+            cache_name="redis", operation="error"
+        ).inc()
         return
 
 
@@ -321,7 +348,11 @@ def login(
         data={"sub": user.reader_id}, expires_delta=access_token_expires
     )
 
-    return {"access_token": access_token, "token_type": "bearer", "reader_id": user.reader_id}
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "reader_id": user.reader_id,
+    }
 
 
 @app.post("/token")
@@ -431,7 +462,8 @@ def search_books_api(
 ):
     cache_key = (
         f"books:search:{q.strip().lower() or 'default'}:"
-        f"{category or 'all'}:{'available' if only_available else 'all'}:{limit}"
+        f"{category or 'all'}:"
+        f"{'available' if only_available else 'all'}:{limit}"
     )
 
     try:
@@ -514,14 +546,18 @@ def healthz():
     return {
         "status": "ok",
         "redis": "up" if get_redis_client() is not None else "degraded",
-        "elasticsearch": "up" if get_elasticsearch_client() is not None else "degraded",
+        "elasticsearch": (
+            "up" if get_elasticsearch_client() is not None else "degraded"
+        ),
         "rabbitmq": "up" if is_rabbitmq_available() else "degraded",
         "circuit_breakers": get_all_circuit_breaker_states(),
     }
 
 
 @app.get("/analytics/search-trends")
-def search_trends(limit: int = Query(default=10, ge=1, le=20, description="返回数量")):
+def search_trends(
+    limit: int = Query(default=10, ge=1, le=20, description="返回数量")
+):
     try:
         @redis_breaker
         def get_trends():
@@ -530,7 +566,9 @@ def search_trends(limit: int = Query(default=10, ge=1, le=20, description="返�
                 return None
 
             try:
-                trends = client.zrevrange("analytics:search_terms", 0, limit - 1, withscores=True)
+                trends = client.zrevrange(
+                    "analytics:search_terms", 0, limit - 1, withscores=True
+                )
                 if trends:
                     return [
                         {"term": term, "count": int(score)}

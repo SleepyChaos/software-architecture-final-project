@@ -21,10 +21,13 @@ def circuit_breaker_decorator(
             reset_timeout=reset_timeout,
             name=breaker_name,
         )
-        
+
         def state_change_listener(cb, old_state, new_state):
-            logger.info(f"Circuit breaker {cb.name} changed from {old_state} to {new_state}")
-        
+            logger.info(
+                f"Circuit breaker {cb.name} changed from "
+                f"{old_state} to {new_state}"
+            )
+
         breaker.add_listener(state_change_listener)
 
         @breaker
@@ -32,7 +35,9 @@ def circuit_breaker_decorator(
             try:
                 return func(*args, **kwargs)
             except Exception as e:
-                logger.error(f"Circuit breaker {breaker_name} caught exception: {e}")
+                logger.error(
+                    f"Circuit breaker {breaker_name} caught exception: {e}"
+                )
                 raise
 
         return wrapper
@@ -46,8 +51,12 @@ redis_breaker = pybreaker.CircuitBreaker(
     name="redis_breaker",
 )
 
+
 def redis_state_change(cb, old_state, new_state):
-    logger.info(f"Redis circuit breaker changed from {old_state} to {new_state}")
+    logger.info(
+        f"Redis circuit breaker changed from {old_state} to {new_state}"
+    )
+
 
 redis_breaker.add_listener(redis_state_change)
 
@@ -58,8 +67,13 @@ elasticsearch_breaker = pybreaker.CircuitBreaker(
     name="elasticsearch_breaker",
 )
 
+
 def es_state_change(cb, old_state, new_state):
-    logger.info(f"Elasticsearch circuit breaker changed from {old_state} to {new_state}")
+    logger.info(
+        f"Elasticsearch circuit breaker changed from "
+        f"{old_state} to {new_state}"
+    )
+
 
 elasticsearch_breaker.add_listener(es_state_change)
 
@@ -70,8 +84,12 @@ rabbitmq_breaker = pybreaker.CircuitBreaker(
     name="rabbitmq_breaker",
 )
 
+
 def rabbitmq_state_change(cb, old_state, new_state):
-    logger.info(f"RabbitMQ circuit breaker changed from {old_state} to {new_state}")
+    logger.info(
+        f"RabbitMQ circuit breaker changed from {old_state} to {new_state}"
+    )
+
 
 rabbitmq_breaker.add_listener(rabbitmq_state_change)
 

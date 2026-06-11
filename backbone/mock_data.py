@@ -7,11 +7,19 @@ BOOKS = [
         "publisher": "机械工业出版社",
         "publishYear": 2016,
         "category": "科技",
-        "coverImageUrl": "https://placehold.co/200x300/4F46E5/FFFFFF?text=CSAPP",
+        "coverImageUrl": (
+            "https://placehold.co/200x300/4F46E5/FFFFFF?text=CSAPP"
+        ),
         "location": "TP3-42",
         "totalCopies": 5,
         "availableCopies": 2,
-        "barcodes": ["01755621", "01755622", "01755623", "01755624", "01755625"],
+        "barcodes": [
+            "01755621",
+            "01755622",
+            "01755623",
+            "01755624",
+            "01755625",
+        ],
         "copies": [],
         "description": "从程序员的视角详细阐述计算机系统的本质概念，并展示这些概念如何实实在在地影响应用程序的正确性、性能和实用性。",
     },
@@ -23,7 +31,9 @@ BOOKS = [
         "publisher": "机械工业出版社",
         "publishYear": 2020,
         "category": "科技",
-        "coverImageUrl": "https://placehold.co/200x300/059669/FFFFFF?text=CLRS",
+        "coverImageUrl": (
+            "https://placehold.co/200x300/059669/FFFFFF?text=CLRS"
+        ),
         "location": "TP301.6-51",
         "totalCopies": 3,
         "availableCopies": 1,
@@ -39,11 +49,19 @@ BOOKS = [
         "publisher": "人民文学出版社",
         "publishYear": 2018,
         "category": "文学",
-        "coverImageUrl": "https://placehold.co/200x300/DC2626/FFFFFF?text=红楼梦",
+        "coverImageUrl": (
+            "https://placehold.co/200x300/DC2626/FFFFFF?text=红楼梦"
+        ),
         "location": "I242.4-51",
         "totalCopies": 10,
         "availableCopies": 5,
-        "barcodes": ["01755640", "01755641", "01755642", "01755643", "01755644"],
+        "barcodes": [
+            "01755640",
+            "01755641",
+            "01755642",
+            "01755643",
+            "01755644",
+        ],
         "copies": [],
         "description": "中国古代章回体长篇小说，中国古典四大名著之一。",
     },
@@ -55,7 +73,9 @@ BOOKS = [
         "publisher": "作家出版社",
         "publishYear": 2012,
         "category": "文学",
-        "coverImageUrl": "https://placehold.co/200x300/7C2D12/FFFFFF?text=活着",
+        "coverImageUrl": (
+            "https://placehold.co/200x300/7C2D12/FFFFFF?text=活着"
+        ),
         "location": "I247.5-42",
         "totalCopies": 8,
         "availableCopies": 3,
@@ -71,7 +91,9 @@ BOOKS = [
         "publisher": "中信出版社",
         "publishYear": 2017,
         "category": "历史",
-        "coverImageUrl": "https://placehold.co/200x300/92400E/FFFFFF?text=人类简史",
+        "coverImageUrl": (
+            "https://placehold.co/200x300/92400E/FFFFFF?text=人类简史"
+        ),
         "location": "K02-51",
         "totalCopies": 6,
         "availableCopies": 2,
@@ -87,7 +109,9 @@ BOOKS = [
         "publisher": "南海出版公司",
         "publishYear": 2017,
         "category": "文学",
-        "coverImageUrl": "https://placehold.co/200x300/1F2937/FFFFFF?text=百年孤独",
+        "coverImageUrl": (
+            "https://placehold.co/200x300/1F2937/FFFFFF?text=百年孤独"
+        ),
         "location": "I775.4-51",
         "totalCopies": 4,
         "availableCopies": 0,
