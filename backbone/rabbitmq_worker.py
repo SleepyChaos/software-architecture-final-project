@@ -55,7 +55,7 @@ def handle_message(ch, method, properties, body):
         except RedisError:
             pass
 
-    print(f"RabbitMQ event consumed: {event_type} -> {payload}")
+    print(f"RabbitMQ event consumed: {event_type} -> {payload}", flush=True)
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
 

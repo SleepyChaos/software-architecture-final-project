@@ -262,11 +262,7 @@ def startup_event():
             print(f"初始化：已创建演示用户 {created_users}")
 
         try:
-            @elasticsearch_breaker
-            def init_es():
-                return ensure_index()
-
-            if init_es():
+            if elasticsearch_breaker.call(ensure_index):
                 print("初始化：Elasticsearch 图书索引已准备好")
             else:
                 print("初始化：Elasticsearch 不可用，搜索将使用本地回退逻辑")
@@ -315,14 +311,11 @@ def login(
     user = authenticate_user(db, user_data.reader_id, user_data.password)
     if not user:
         try:
-            @rabbitmq_breaker
-            def publish_login_failed():
-                publish_event(
-                    "auth.login_failed",
-                    {"reader_id": user_data.reader_id},
-                )
-
-            publish_login_failed()
+            rabbitmq_breaker.call(
+                publish_event,
+                "auth.login_failed",
+                {"reader_id": user_data.reader_id},
+            )
         except Exception:
             pass
 
@@ -332,14 +325,11 @@ def login(
         )
 
     try:
-        @rabbitmq_breaker
-        def publish_login_success():
-            publish_event(
-                "auth.login_success",
-                {"reader_id": user.reader_id},
-            )
-
-        publish_login_success()
+        rabbitmq_breaker.call(
+            publish_event,
+            "auth.login_success",
+            {"reader_id": user.reader_id},
+        )
     except Exception:
         pass
 
@@ -392,11 +382,7 @@ def recommended_books():
     cache_key = "books:recommended"
 
     try:
-        @redis_breaker
-        def get_cached():
-            return read_cache(cache_key)
-
-        cached = get_cached()
+        cached = redis_breaker.call(read_cache, cache_key)
         if cached is not None:
             return cached
     except Exception:
@@ -405,11 +391,7 @@ def recommended_books():
     data = get_recommended_books()
 
     try:
-        @redis_breaker
-        def set_cache():
-            write_cache(cache_key, data, CACHE_TTL_RECOMMENDED)
-
-        set_cache()
+        redis_breaker.call(write_cache, cache_key, data, CACHE_TTL_RECOMMENDED)
     except Exception:
         pass
 
@@ -422,31 +404,19 @@ def search_suggestions(q: str = Query(default="", description="搜索关键词")
     cache_key = f"search:suggestions:{normalized_query or 'default'}"
 
     try:
-        @redis_breaker
-        def get_cached():
-            return read_cache(cache_key)
-
-        cached = get_cached()
+        cached = redis_breaker.call(read_cache, cache_key)
         if cached is not None:
             return cached
     except Exception:
         pass
 
     try:
-        @elasticsearch_breaker
-        def search():
-            return get_search_suggestions(q)
-
-        suggestions = search()
+        suggestions = elasticsearch_breaker.call(get_search_suggestions, q)
     except Exception:
         suggestions = suggest_books(q)
 
     try:
-        @redis_breaker
-        def set_cache():
-            write_cache(cache_key, suggestions, CACHE_TTL_SUGGESTIONS)
-
-        set_cache()
+        redis_breaker.call(write_cache, cache_key, suggestions, CACHE_TTL_SUGGESTIONS)
     except Exception:
         pass
 
@@ -467,26 +437,19 @@ def search_books_api(
     )
 
     try:
-        @redis_breaker
-        def get_cached():
-            return read_cache(cache_key)
-
-        cached = get_cached()
+        cached = redis_breaker.call(read_cache, cache_key)
         if cached is not None:
             try:
-                @rabbitmq_breaker
-                def publish():
-                    publish_event(
-                        "search.books",
-                        {
-                            "query": q,
-                            "category": category,
-                            "only_available": only_available,
-                            "result_count": len(cached),
-                        },
-                    )
-
-                publish()
+                rabbitmq_breaker.call(
+                    publish_event,
+                    "search.books",
+                    {
+                        "query": q,
+                        "category": category,
+                        "only_available": only_available,
+                        "result_count": len(cached),
+                    },
+                )
             except Exception:
                 pass
             return cached
@@ -494,16 +457,13 @@ def search_books_api(
         pass
 
     try:
-        @elasticsearch_breaker
-        def search():
-            return search_books(
-                query=q,
-                category=category,
-                only_available=only_available,
-                limit=limit,
-            )
-
-        results = search()
+        results = elasticsearch_breaker.call(
+            search_books,
+            query=q,
+            category=category,
+            only_available=only_available,
+            limit=limit,
+        )
     except Exception:
         results = search_books(
             query=q,
@@ -513,28 +473,21 @@ def search_books_api(
         )
 
     try:
-        @redis_breaker
-        def set_cache():
-            write_cache(cache_key, results, CACHE_TTL_RECOMMENDED)
-
-        set_cache()
+        redis_breaker.call(write_cache, cache_key, results, CACHE_TTL_RECOMMENDED)
     except Exception:
         pass
 
     try:
-        @rabbitmq_breaker
-        def publish():
-            publish_event(
-                "search.books",
-                {
-                    "query": q,
-                    "category": category,
-                    "only_available": only_available,
-                    "result_count": len(results),
-                },
-            )
-
-        publish()
+        rabbitmq_breaker.call(
+            publish_event,
+            "search.books",
+            {
+                "query": q,
+                "category": category,
+                "only_available": only_available,
+                "result_count": len(results),
+            },
+        )
     except Exception:
         pass
 
@@ -554,31 +507,31 @@ def healthz():
     }
 
 
+def _get_trends_from_redis(limit: int):
+    """从 Redis 获取搜索热词趋势"""
+    client = get_redis_client()
+    if client is None:
+        return None
+    try:
+        trends = client.zrevrange(
+            "analytics:search_terms", 0, limit - 1, withscores=True
+        )
+        if trends:
+            return [
+                {"term": term, "count": int(score)}
+                for term, score in trends
+            ]
+    except RedisError:
+        return None
+    return None
+
+
 @app.get("/analytics/search-trends")
 def search_trends(
     limit: int = Query(default=10, ge=1, le=20, description="返回数量")
 ):
     try:
-        @redis_breaker
-        def get_trends():
-            client = get_redis_client()
-            if client is None:
-                return None
-
-            try:
-                trends = client.zrevrange(
-                    "analytics:search_terms", 0, limit - 1, withscores=True
-                )
-                if trends:
-                    return [
-                        {"term": term, "count": int(score)}
-                        for term, score in trends
-                    ]
-            except RedisError:
-                return None
-            return None
-
-        trends = get_trends()
+        trends = redis_breaker.call(_get_trends_from_redis, limit)
         if trends is not None:
             return trends
     except Exception:
