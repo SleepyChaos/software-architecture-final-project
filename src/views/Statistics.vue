@@ -26,8 +26,24 @@
         </div>
 
         <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 lg:col-span-2">
-          <h2 class="text-base font-bold text-slate-700 mb-4">热门搜索词 Top 10</h2>
-          <v-chart :option="searchTrendOption" autoresize style="height: 400px" />
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-base font-bold text-slate-700">热门搜索词 Top 10</h2>
+            <button
+              @click="loadSearchTrends"
+              :disabled="isLoadingTrends"
+              class="text-xs px-2 py-1 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw v-if="!isLoadingTrends" class="w-3.5 h-3.5 inline-block mr-1" />
+              <Loader2 v-else class="w-3.5 h-3.5 inline-block mr-1 animate-spin" />
+              刷新
+            </button>
+          </div>
+          <div v-if="searchTrends.length === 0" class="h-[400px] flex flex-col items-center justify-center text-slate-400">
+            <BarChart3 class="w-12 h-12 mb-3 opacity-50" />
+            <p class="text-sm">暂无搜索热词</p>
+            <p class="text-xs mt-1 text-slate-300">用户搜索后会自动出现在这里</p>
+          </div>
+          <v-chart v-else :option="searchTrendOption" autoresize style="height: 400px" />
         </div>
       </div>
     </div>
@@ -35,8 +51,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { ArrowLeft } from 'lucide-vue-next'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { ArrowLeft, BarChart3, Loader2, RefreshCw } from 'lucide-vue-next'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { PieChart, BarChart } from 'echarts/charts'
@@ -49,23 +65,23 @@ use([CanvasRenderer, PieChart, BarChart, TitleComponent, TooltipComponent, Legen
 const booksStore = useBooksStore()
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 const searchTrends = ref<Array<{ term: string; count: number }>>([])
+const isLoadingTrends = ref(false)
+const trendsError = ref<string | null>(null)
 
 async function loadSearchTrends() {
+  isLoadingTrends.value = true
+  trendsError.value = null
   try {
     const response = await fetch(`${API_BASE_URL}/analytics/search-trends?limit=10`)
     if (!response.ok) {
-      throw new Error('加载搜索热词失败')
+      throw new Error(`HTTP ${response.status}`)
     }
-
     searchTrends.value = await response.json()
   } catch (error) {
-    searchTrends.value = [
-      { term: '深入理解计算机系统', count: 12 },
-      { term: '算法导论', count: 10 },
-      { term: '红楼梦', count: 9 },
-      { term: '活着', count: 8 },
-      { term: '人类简史', count: 6 },
-    ]
+    trendsError.value = error instanceof Error ? error.message : '加载失败'
+    searchTrends.value = []     // 失败就是空，不兜底
+  } finally {
+    isLoadingTrends.value = false
   }
 }
 
@@ -128,15 +144,8 @@ const monthlyOption = computed(() => {
 })
 
 const searchTrendOption = computed(() => {
-  const trends = searchTrends.value.length > 0
-    ? searchTrends.value
-    : [
-      { term: '深入理解计算机系统', count: 12 },
-      { term: '算法导论', count: 10 },
-      { term: '红楼梦', count: 9 },
-      { term: '活着', count: 8 },
-      { term: '人类简史', count: 6 },
-    ]
+  // 不再有 mock 兜底——空就是空
+  const trends = searchTrends.value
 
   return {
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
@@ -164,8 +173,19 @@ const searchTrendOption = computed(() => {
   }
 })
 
+let refreshTimer: number | null = null
+const REFRESH_INTERVAL_MS = 10000    // 10 秒轮询一次
+
 onMounted(() => {
   booksStore.initialize()
   loadSearchTrends()
+  refreshTimer = window.setInterval(loadSearchTrends, REFRESH_INTERVAL_MS)
+})
+
+onUnmounted(() => {
+  if (refreshTimer !== null) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
 })
 </script>

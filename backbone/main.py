@@ -403,9 +403,29 @@ def search_suggestions(q: str = Query(default="", description="搜索关键词")
     normalized_query = q.strip().lower()
     cache_key = f"search:suggestions:{normalized_query or 'default'}"
 
+    # 抽出公共逻辑：触发热词统计事件
+    def _publish(query: str, count: int):
+        if not query:
+            return
+        try:
+            rabbitmq_breaker.call(
+                publish_event,
+                "search.books",
+                {
+                    "query": query,
+                    "category": None,
+                    "only_available": False,
+                    "result_count": count,
+                    "source": "suggestions",
+                },
+            )
+        except Exception:
+            pass
+
     try:
         cached = redis_breaker.call(read_cache, cache_key)
         if cached is not None:
+            _publish(normalized_query, len(cached) if isinstance(cached, list) else 0)   # ← 缓存命中也要发
             return cached
     except Exception:
         pass
@@ -420,6 +440,7 @@ def search_suggestions(q: str = Query(default="", description="搜索关键词")
     except Exception:
         pass
 
+    _publish(normalized_query, len(suggestions) if isinstance(suggestions, list) else 0)   # ← 缓存未命中也要发
     return suggestions
 
 
