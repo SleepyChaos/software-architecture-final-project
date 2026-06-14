@@ -5,6 +5,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { apiFetch } from '@/utils/http'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -284,7 +285,7 @@ export const useBooksStore = defineStore('books', () => {
         return
       }
 
-      const response = await fetch(`${API_BASE_URL}/books/search?q=${encodeURIComponent(normalizedQuery)}`)
+      const response = await apiFetch(`/books/search?q=${encodeURIComponent(normalizedQuery)}`)
       if (!response.ok) {
         throw new Error('后端搜索失败')
       }

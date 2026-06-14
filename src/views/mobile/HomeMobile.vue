@@ -51,8 +51,7 @@ import SearchBar from '@/components/SearchBar.vue'
 import BottomNav from '@/components/BottomNav.vue'
 import BookCard from '@/components/BookCard.vue'
 import { useBooksStore, type Book } from '@/stores/books'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
+import { apiFetch } from '@/utils/http'
 
 // 状态管理：图书存储实例
 const booksStore = useBooksStore()
@@ -60,7 +59,7 @@ const recommendedBooks = ref<Book[]>([])
 
 async function loadRecommendedBooks() {
   try {
-    const response = await fetch(`${API_BASE_URL}/books/recommended`)
+    const response = await apiFetch('/books/recommended')
     if (!response.ok) {
       throw new Error('加载推荐图书失败')
     }

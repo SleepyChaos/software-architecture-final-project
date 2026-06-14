@@ -1,4 +1,4 @@
-/**
+9000/**
  * 用户认证状态管理模块
  * 使用Pinia进行用户登录状态、用户信息的管理
  */
@@ -27,26 +27,32 @@ export interface User {
 export const useAuthStore = defineStore('auth', () => {
   // 状态定义
   const user = ref<User | null>(null)      // 当前用户信息
+  const token = ref<string | null>(null)   // JWT 令牌
   const isLoading = ref(false)             // 登录加载状态
   const error = ref<string | null>(null)   // 错误信息
 
   // 计算属性：判断用户是否已认证
-  const isAuthenticated = computed(() => !!user.value)
+  const isAuthenticated = computed(() => !!user.value && !!token.value)
 
   /**
-     * 用户登录函数
-     * 调用后端API验证用户凭据并设置用户信息
-     * @param studentId - 学号/读者证号
-     * @param password - 用户密码
-     * @returns 登录是否成功
-     */
+   * 获取当前 token（供 http 工具使用）
+   */
+  function getToken(): string | null {
+    return token.value
+  }
+
+  /**
+   * 用户登录函数
+   * 调用后端API验证用户凭据并设置用户信息和令牌
+   * @param studentId - 学号/读者证号
+   * @param password - 用户密码
+   * @returns 登录是否成功
+   */
   async function login(studentId: string, password: string): Promise<boolean> {
-    // 设置加载状态和重置错误信息
     isLoading.value = true
     error.value = null
 
     try {
-      // 调用后端登录API
       const response = await fetch(`${API_BASE_URL}/login`, {
         method: 'POST',
         headers: {
@@ -55,14 +61,16 @@ export const useAuthStore = defineStore('auth', () => {
         body: JSON.stringify({ reader_id: studentId, password: password }),
       })
 
-      // 检查响应状态
       if (!response.ok) {
         throw new Error('登录失败')
       }
 
       const data = await response.json()
 
-      // 适配用户数据（由于后端只返回ID，其他字段进行Mock处理）
+      // 存储 JWT 令牌
+      token.value = data.access_token
+
+      // 适配用户数据
       user.value = {
         id: data.reader_id,
         email: `${data.reader_id}@school.edu.cn`,
@@ -71,29 +79,28 @@ export const useAuthStore = defineStore('auth', () => {
         department: '通用学院'
       }
 
-      // 将用户信息保存到本地存储，实现登录状态持久化
+      // 持久化用户信息和令牌
       localStorage.setItem('user', JSON.stringify(user.value))
+      localStorage.setItem('token', token.value)
 
       return true
     } catch (err) {
-      // 处理登录错误
       error.value = '登录失败，请检查账号密码'
       return false
     } finally {
-      // 重置加载状态
       isLoading.value = false
     }
   }
 
   /**
-     * 用户登出函数
-     * 清除当前用户信息和本地存储
-     */
+   * 用户登出函数
+   * 清除当前用户信息、令牌和本地存储
+   */
   function logout() {
-    // 重置用户状态
     user.value = null
-    // 清除本地存储的用户信息
+    token.value = null
     localStorage.removeItem('user')
+    localStorage.removeItem('token')
   }
 
   /**
@@ -132,18 +139,18 @@ export const useAuthStore = defineStore('auth', () => {
 
   /**
    * 初始化用户函数
-   * 从本地存储恢复用户登录状态
+   * 从本地存储恢复用户登录状态和令牌
    */
   function initializeUser() {
-    // 从本地存储获取用户信息
     const storedUser = localStorage.getItem('user')
-    if (storedUser) {
+    const storedToken = localStorage.getItem('token')
+    if (storedUser && storedToken) {
       try {
-        // 解析并恢复用户数据
         user.value = JSON.parse(storedUser)
+        token.value = storedToken
       } catch (error) {
-        // 如果解析失败，清除损坏的存储数据
         localStorage.removeItem('user')
+        localStorage.removeItem('token')
       }
     }
   }
@@ -151,11 +158,13 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     // 状态导出
     user,           // 当前用户信息
+    token,          // JWT 令牌
     isLoading,      // 登录加载状态
     error,          // 错误信息
     isAuthenticated, // 认证状态
 
     // 方法导出
+    getToken,       // 获取令牌函数
     login,          // 登录函数
     logout,         // 登出函数
     register,       // 注册函数

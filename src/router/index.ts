@@ -6,6 +6,7 @@
 // 导入Vue Router核心函数和类型
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
+import { showToast } from '@/utils/toast'
 
 // 页面组件导入
 import Login from '@/views/Login.vue'
@@ -171,18 +172,19 @@ const router = createRouter({
  * 处理页面标题设置和登录权限验证
  */
 router.beforeEach((to, from, next) => {
-  // 设置页面标题：如果路由定义了标题则追加系统名称，否则使用默认标题
+  // 设置页面标题
   document.title = to.meta.title ? `${to.meta.title} - 图书管理系统` : '图书管理系统'
 
   // 登录权限验证
-  const isLoggedIn = !!localStorage.getItem('user')  // 检查本地存储中是否存在用户信息
+  const isLoggedIn = !!localStorage.getItem('token')  // 检查本地存储中是否存在令牌
   const needAuth = (to.meta as any)?.authRequired    // 获取当前路由是否需要认证
   
-  // 如果需要认证且用户未登录，则重定向到登录页面
+  // 如果需要认证且用户未登录，弹出 401 提示而非跳转
   if (needAuth && !isLoggedIn) {
-    next({ name: 'Login' })
+    showToast('401 未授权，请先登录后再操作', 'error')
+    // 不跳转，留在当前页面
+    next(false)
   } else {
-    // 否则正常导航
     next()
   }
 })

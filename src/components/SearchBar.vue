@@ -39,10 +39,10 @@ import { useRouter } from 'vue-router'
 import { Search, X } from 'lucide-vue-next'
 import { useBooksStore } from '@/stores/books'
 import { debounce } from '@/utils'
+import { apiFetch } from '@/utils/http'
 
 const router = useRouter()
 const booksStore = useBooksStore()
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 const defaultSuggestions = ['深入理解计算机系统', '算法导论', '红楼梦', '活着', '人工智能', '数据结构']
 
 // 状态
@@ -58,7 +58,7 @@ async function loadSuggestions(query: string) {
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/search/suggestions?q=${encodeURIComponent(query)}`)
+    const response = await apiFetch(`/search/suggestions?q=${encodeURIComponent(query)}`)
     if (!response.ok) {
       throw new Error('加载搜索建议失败')
     }

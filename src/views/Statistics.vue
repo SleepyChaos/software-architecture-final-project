@@ -59,11 +59,11 @@ import { PieChart, BarChart } from 'echarts/charts'
 import { TitleComponent, TooltipComponent, LegendComponent, GridComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { useBooksStore } from '@/stores/books'
+import { apiFetch } from '@/utils/http'
 
 use([CanvasRenderer, PieChart, BarChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent])
 
 const booksStore = useBooksStore()
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 const searchTrends = ref<Array<{ term: string; count: number }>>([])
 const isLoadingTrends = ref(false)
 const trendsError = ref<string | null>(null)
@@ -72,7 +72,7 @@ async function loadSearchTrends() {
   isLoadingTrends.value = true
   trendsError.value = null
   try {
-    const response = await fetch(`${API_BASE_URL}/analytics/search-trends?limit=10`)
+    const response = await apiFetch('/analytics/search-trends?limit=10')
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`)
     }
