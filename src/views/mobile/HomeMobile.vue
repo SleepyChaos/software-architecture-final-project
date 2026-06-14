@@ -60,6 +60,7 @@ const recommendedBooks = ref<Book[]>([])
 
 async function loadRecommendedBooks() {
   try {
+    // 推荐图书通过后端接口获取，接口内部会优先读取 Redis 缓存。
     const response = await fetch(`${API_BASE_URL}/books/recommended`)
     if (!response.ok) {
       throw new Error('加载推荐图书失败')

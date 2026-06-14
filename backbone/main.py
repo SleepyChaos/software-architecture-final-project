@@ -137,8 +137,10 @@ async def rate_limit_middleware(request, call_next):
 
 def get_redis_client():
     """
-    获取Redis客户端。
-    如果Redis不可用，则返回None，接口会自动降级到本地计算逻辑。
+    获取 Redis 客户端实例。
+
+    该函数负责统一创建并复用 Redis 连接；如果 Redis 不可用，
+    则返回 None，供上层接口自动降级到本地计算或回退逻辑。
     """
     global _redis_client
 
@@ -160,6 +162,12 @@ def get_redis_client():
 
 
 def read_cache(key: str):
+    """
+    根据键名读取 Redis 缓存内容。
+
+    如果缓存命中则返回反序列化后的结果；如果 Redis 不可用、
+    键不存在或反序列化失败，则返回 None。
+    """
     client = get_redis_client()
     if client is None:
         return None
@@ -184,6 +192,12 @@ def read_cache(key: str):
 
 
 def write_cache(key: str, value, ttl: int):
+    """
+    将数据写入 Redis 缓存并设置过期时间。
+
+    该函数统一负责缓存序列化与 TTL 控制；如果 Redis 不可用
+    或写入失败，则静默降级，不中断主业务流程。
+    """
     client = get_redis_client()
     if client is None:
         return
@@ -202,14 +216,20 @@ def write_cache(key: str, value, ttl: int):
 
 def get_recommended_books():
     """
-    获取推荐图书列表。
+    生成推荐图书列表的后端回退结果。
+
+    当推荐缓存未命中或 Redis 不可用时，接口会调用该函数
+    从当前图书数据中选出可借图书作为推荐结果。
     """
     return [book for book in BOOKS if book["availableCopies"] > 0][:6]
 
 
 def get_search_suggestions(query: str):
     """
-    根据关键词生成搜索建议。
+    根据关键词生成搜索建议结果。
+
+    该函数作为搜索建议接口的后端计算逻辑，在缓存未命中时
+    生成候选建议列表，并供后续写回 Redis。
     """
     return suggest_books(query)
 
@@ -279,7 +299,10 @@ def startup_event():
 
 def is_rate_limited(client_ip: str) -> bool:
     """
-    检查客户端是否超过限流阈值
+    检查指定客户端 IP 是否超过限流阈值。
+
+    该函数基于 Redis 的 INCR 和 EXPIRE 实现固定时间窗口限流；
+    若 Redis 不可用，则返回 False，避免影响主业务可用性。
     """
     client = get_redis_client()
     if client is None:
@@ -389,6 +412,12 @@ async def read_users_me(current_user: models.User = Depends(get_current_user)):
 
 @app.get("/books/recommended")
 def recommended_books():
+    """
+    返回推荐图书列表，并优先使用 Redis 缓存。
+
+    接口采用 Cache-Aside 模式：先读缓存，未命中时再计算推荐结果，
+    随后写回 Redis，以降低重复计算开销。
+    """
     cache_key = "books:recommended"
 
     try:
@@ -418,6 +447,12 @@ def recommended_books():
 
 @app.get("/search/suggestions")
 def search_suggestions(q: str = Query(default="", description="搜索关键词")):
+    """
+    返回搜索建议，并按关键词粒度使用 Redis 缓存。
+
+    接口会先读取 search:suggestions:* 缓存；若未命中，则执行
+    建议词生成逻辑，并将结果以短 TTL 写回 Redis。
+    """
     normalized_query = q.strip().lower()
     cache_key = f"search:suggestions:{normalized_query or 'default'}"
 
@@ -460,6 +495,12 @@ def search_books_api(
     only_available: bool = Query(default=False, description="仅看可借"),
     limit: int = Query(default=12, ge=1, le=20, description="返回数量"),
 ):
+    """
+    按查询条件搜索图书，并缓存搜索结果。
+
+    该接口会根据关键词、分类、可借状态和返回数量拼接缓存键，
+    优先读取 Redis；未命中时执行搜索逻辑并回写缓存。
+    """
     cache_key = (
         f"books:search:{q.strip().lower() or 'default'}:"
         f"{category or 'all'}:"
@@ -543,6 +584,12 @@ def search_books_api(
 
 @app.get("/healthz")
 def healthz():
+    """
+    返回服务健康状态与 Redis 可用性信息。
+
+    该接口用于 Docker 和 Kubernetes 的健康检查，同时汇总
+    Redis、Elasticsearch、RabbitMQ 及熔断器当前状态。
+    """
     return {
         "status": "ok",
         "redis": "up" if get_redis_client() is not None else "degraded",
@@ -558,6 +605,12 @@ def healthz():
 def search_trends(
     limit: int = Query(default=10, ge=1, le=20, description="返回数量")
 ):
+    """
+    返回热门搜索词排行，并优先读取 Redis 有序集合。
+
+    如果 Redis 中存在 analytics:search_terms 统计数据，则返回
+    Top N 结果；否则回退到默认建议词，保证统计页面可展示。
+    """
     try:
         @redis_breaker
         def get_trends():

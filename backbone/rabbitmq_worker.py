@@ -17,6 +17,12 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
 
 
 def get_redis_client():
+    """
+    获取 Worker 使用的 Redis 客户端实例。
+
+    该函数用于消息消费进程访问 Redis 统计数据；如果 Redis
+    不可用，则返回 None，后续统计写入将自动跳过。
+    """
     try:
         client = Redis.from_url(
             REDIS_URL,
@@ -31,6 +37,12 @@ def get_redis_client():
 
 
 def handle_message(ch, method, properties, body):
+    """
+    处理 RabbitMQ 事件并将统计结果写入 Redis。
+
+    当前支持搜索热词、登录成功次数和登录失败次数三类事件，
+    其中热词使用 Sorted Set，登录统计使用计数器累加。
+    """
     try:
         message = json.loads(body)
     except json.JSONDecodeError:
@@ -60,6 +72,12 @@ def handle_message(ch, method, properties, body):
 
 
 def run_worker():
+    """
+    启动 RabbitMQ 消费循环。
+
+    Worker 会持续监听事件队列，消费消息后调用 Redis 相关
+    统计逻辑，并在连接异常时进行自动重试。
+    """
     if pika is None:
         raise RuntimeError("pika is not installed")
 

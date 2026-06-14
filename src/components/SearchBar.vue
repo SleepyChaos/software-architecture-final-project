@@ -58,6 +58,7 @@ async function loadSuggestions(query: string) {
   }
 
   try {
+    // 搜索建议通过后端接口获取，接口内部会优先读取 Redis 缓存。
     const response = await fetch(`${API_BASE_URL}/search/suggestions?q=${encodeURIComponent(query)}`)
     if (!response.ok) {
       throw new Error('加载搜索建议失败')
