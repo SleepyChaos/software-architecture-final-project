@@ -4,6 +4,7 @@ import Search from '@/views/Search.vue'
 import BookDetail from '@/views/BookDetail.vue'
 import History from '@/views/History.vue'
 import ProfileMobile from '@/views/mobile/ProfileMobile.vue'
+import RegisterMobile from '@/views/mobile/RegisterMobile.vue'
 import Fines from '@/views/mobile/Fines.vue'
 
 const router = createRouter({
@@ -17,6 +18,8 @@ const router = createRouter({
     { path: '/history', name: 'MHistory', component: History, meta: { title: '借阅历史' } },
     { path: '/profile', name: 'MProfile', component: ProfileMobile, meta: { title: '我的' } },
     { path: '/mobile/profile', component: ProfileMobile, meta: { title: '我的' } },
+    { path: '/register', name: 'MRegister', component: RegisterMobile, meta: { title: '注册' } },
+    { path: '/mobile/register', component: RegisterMobile, meta: { title: '注册' } },
     { path: '/fines', name: 'MFines', component: Fines, meta: { title: '滞纳金' } },
   ]
 })

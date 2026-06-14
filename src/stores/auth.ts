@@ -97,6 +97,40 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
+   * 用户注册函数
+   * 调用后端API注册新用户
+   * @param readerId - 读者证号
+   * @param password - 用户密码
+   * @returns 注册是否成功
+   */
+  async function register(readerId: string, password: string): Promise<boolean> {
+    isLoading.value = true
+    error.value = null
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reader_id: readerId, password }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.detail || '注册失败')
+      }
+
+      return true
+    } catch (err: any) {
+      error.value = err.message || '注册失败，请稍后重试'
+      return false
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /**
    * 初始化用户函数
    * 从本地存储恢复用户登录状态
    */
@@ -124,6 +158,7 @@ export const useAuthStore = defineStore('auth', () => {
     // 方法导出
     login,          // 登录函数
     logout,         // 登出函数
+    register,       // 注册函数
     initializeUser  // 初始化用户函数
   }
 })

@@ -20,6 +20,18 @@ class UserLogin(BaseModel):
         from_attributes = True  # 允许从ORM对象的属性创建模型实例
 
 
+class UserRegister(BaseModel):
+    """
+    用户注册请求模型
+    用于接收前端发送的注册数据
+    """
+    reader_id: str  # 读者号码，作为用户的唯一标识
+    password: str   # 密码，用户的登录密码
+
+    class Config:
+        from_attributes = True
+
+
 class UserResponse(BaseModel):
     """
     用户响应模型

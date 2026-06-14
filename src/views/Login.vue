@@ -1,9 +1,9 @@
 <!--
   登录页面组件
-  功能：提供读者证登录和人脸识别登录两种方式，支持用户身份验证
+  功能：提供读者证登录和注册新账号两种方式，支持用户身份验证
   特点：
-  - 双重登录方式：读者证登录和人脸识别登录
-  - 动态切换登录方式，提供流畅的用户体验
+  - 双重模式：读者证登录和新用户注册
+  - 动态切换登录/注册，提供流畅的用户体验
   - 表单验证和错误提示
   - 响应式设计，适配不同屏幕尺寸
 -->
@@ -36,7 +36,7 @@
 
         <div class="relative z-10">
           <p class="text-sm text-blue-200 leading-relaxed mb-4">
-            请选择您喜欢的登录方式，支持读者证刷卡登录或人脸识别快速登录。
+            已有账号请使用读者证登录，新用户可点击注册创建账号。
           </p>
           <div class="text-xs text-blue-300">系统版本 v2.0.1</div>
         </div>
@@ -55,14 +55,14 @@
             <CreditCard class="w-5 h-5" />
             读者证登录
           </button>
-          <!-- 人脸识别登录按钮 -->
+          <!-- 注册账号按钮 -->
           <button 
             class="flex-1 py-4 rounded-xl border-2 font-bold transition-all flex items-center justify-center gap-2"
-            :class="loginMethod === 'face' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-100 text-slate-400 hover:border-blue-200 hover:bg-slate-50'"
-            @click="setMethod('face')"
+            :class="loginMethod === 'register' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-100 text-slate-400 hover:border-blue-200 hover:bg-slate-50'"
+            @click="setMethod('register')"
           >
-            <ScanFace class="w-5 h-5" />
-            人脸识别
+            <UserPlus class="w-5 h-5" />
+            注册账号
           </button>
         </div>
 
@@ -122,51 +122,87 @@
           </div>
         </div>
 
-        <!-- 人脸识别区域：人脸识别登录界面 -->
-        <div v-else class="animate-fade-in text-center">
-          <!-- 人脸识别视频区域：摄像头视频显示和扫描动画 -->
-          <div class="relative w-64 h-64 mx-auto mb-8 rounded-full overflow-hidden border-4 border-blue-100 bg-slate-900">
-            <!-- 视频元素：显示摄像头实时画面，水平翻转 -->
-            <video ref="videoRef" class="w-full h-full object-cover transform scale-x-[-1]" autoplay muted playsinline></video>
-            
-            <!-- 扫描动画覆盖层：人脸识别时的扫描线动画 -->
-            <div v-if="isFaceRunning" class="absolute inset-0 z-10">
-              <!-- 扫描线：蓝色扫描线，带有发光效果 -->
-              <div class="w-full h-1 bg-blue-400/80 absolute top-0 shadow-[0_0_15px_rgba(59,130,246,0.5)] animate-face-scan"></div>
-              <!-- 扫描边框：蓝色半透明边框 -->
-              <div class="absolute inset-0 border-4 border-blue-500/30 rounded-full"></div>
-              <!-- 扫描框：白色虚线框 -->
-              <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border-2 border-dashed border-white/30 rounded-2xl"></div>
+        <!-- 注册区域：新用户注册表单 -->
+        <div v-else class="animate-fade-in">
+          <div class="space-y-5">
+            <!-- 读者证号输入框 -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2">读者证号 / 学号</label>
+              <div class="relative">
+                <input 
+                  v-model="registerId"
+                  type="text" 
+                  class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-lg font-medium"
+                  placeholder="请输入您的读者证号"
+                >
+                <CreditCard class="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 w-6 h-6" />
+              </div>
             </div>
 
-            <!-- 未运行状态：显示人脸识别图标 -->
-            <div v-if="!isFaceRunning" class="absolute inset-0 flex items-center justify-center bg-slate-900/50">
-              <ScanFace class="w-20 h-20 text-white/50" />
+            <!-- 密码输入框 -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2">设置密码</label>
+              <div class="relative">
+                <input 
+                  v-model="registerPassword"
+                  :type="showRegisterPassword ? 'text' : 'password'"
+                  class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-lg font-medium pr-14"
+                  placeholder="请设置密码（至少6位）"
+                >
+                <button
+                  type="button"
+                  @click="showRegisterPassword = !showRegisterPassword"
+                  class="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <EyeOff v-if="showRegisterPassword" class="w-5 h-5" />
+                  <Eye v-else class="w-5 h-5" />
+                </button>
+              </div>
             </div>
+
+            <!-- 确认密码输入框 -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2">确认密码</label>
+              <div class="relative">
+                <input 
+                  v-model="registerConfirmPassword"
+                  :type="showRegisterPassword ? 'text' : 'password'"
+                  class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-lg font-medium"
+                  placeholder="请再次输入密码"
+                  @keyup.enter="handleRegister"
+                >
+                <Lock class="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 w-6 h-6" />
+              </div>
+              <!-- 密码不一致提示 -->
+              <p
+                v-if="registerConfirmPassword && registerPassword !== registerConfirmPassword"
+                class="text-xs text-red-500 mt-2"
+              >
+                两次输入的密码不一致
+              </p>
+            </div>
+
+            <!-- 错误提示区域 -->
+            <div v-if="authStore.error" class="text-red-500 text-sm bg-red-50 px-4 py-2 rounded-lg">
+              {{ authStore.error }}
+            </div>
+
+            <!-- 注册成功提示 -->
+            <div v-if="registerSuccess" class="text-green-600 text-sm bg-green-50 px-4 py-3 rounded-lg flex items-center gap-2">
+              <CheckCircle2 class="w-5 h-5" />
+              注册成功！请切换到登录页进行登录
+            </div>
+
+            <!-- 注册按钮 -->
+            <button 
+              class="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg hover:bg-blue-700 transition-colors shadow-lg hover:shadow-blue-500/30 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              :disabled="authStore.isLoading || !isRegisterValid || registerSuccess"
+              @click="handleRegister"
+            >
+              <Loader2 v-if="authStore.isLoading" class="w-5 h-5 animate-spin" />
+              {{ authStore.isLoading ? '注册中...' : '立即注册' }}
+            </button>
           </div>
-
-          <!-- 人脸识别状态提示：根据运行状态显示不同提示信息 -->
-          <p class="text-slate-500 mb-8" v-if="isFaceRunning">
-            正在识别您的身份... <br>
-            <span class="text-xs text-slate-400">请保持正对摄像头</span>
-          </p>
-          <p class="text-slate-500 mb-8" v-else>
-            点击下方按钮开始人脸识别
-          </p>
-
-          <!-- 人脸识别按钮：启动或停止人脸识别 -->
-          <button 
-            class="w-full py-4 rounded-xl font-bold text-lg transition-all shadow-lg flex items-center justify-center gap-2"
-            :class="isFaceRunning ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-blue-500/30'"
-            :disabled="isFaceRunning"
-            @click="startFaceLogin"
-          >
-            <!-- 图标：根据状态显示不同图标 -->
-            <ScanFace v-if="!isFaceRunning" class="w-6 h-6" />
-            <Loader2 v-else class="w-6 h-6 animate-spin" />
-            <!-- 按钮文字：根据状态显示不同文本 -->
-            {{ isFaceRunning ? '识别中...' : '开始人脸识别' }}
-          </button>
         </div>
 
       </div>
@@ -175,9 +211,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { BookOpen, Loader2, CreditCard, ScanFace, Lock, ArrowLeft, Info } from 'lucide-vue-next'
+import { BookOpen, Loader2, CreditCard, UserPlus, Lock, ArrowLeft, Info, Eye, EyeOff, CheckCircle2 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 
 // 路由和状态管理初始化
@@ -185,23 +221,34 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 // 响应式数据定义
-const loginMethod = ref<'card' | 'face'>('card') // 登录方式：读者证或人脸识别
-const studentId = ref('') // 读者证号/学号
-const password = ref('') // 密码
-const isFaceRunning = ref(false) // 人脸识别运行状态
-const videoRef = ref<HTMLVideoElement | null>(null) // 视频元素引用
-let stream: MediaStream | null = null // 媒体流对象
+const loginMethod = ref<'card' | 'register'>('card') // 模式：读者证登录或注册
+const studentId = ref('') // 读者证号/学号（登录用）
+const password = ref('') // 密码（登录用）
+
+// 注册表单数据
+const registerId = ref('') // 读者证号（注册用）
+const registerPassword = ref('') // 密码（注册用）
+const registerConfirmPassword = ref('') // 确认密码（注册用）
+const showRegisterPassword = ref(false) // 注册密码可见性
+const registerSuccess = ref(false) // 注册成功标记
+
+// 注册表单有效性
+const isRegisterValid = computed(() => {
+  return (
+    registerId.value.trim() !== '' &&
+    registerPassword.value.length >= 6 &&
+    registerPassword.value === registerConfirmPassword.value
+  )
+})
 
 /**
- * 设置登录方式
- * @param m 登录方式类型：'card' 或 'face'
+ * 切换登录/注册模式
+ * @param m 模式类型：'card' 或 'register'
  */
-function setMethod(m: 'card' | 'face') {
+function setMethod(m: 'card' | 'register') {
   loginMethod.value = m
-  // 如果切换到读者证登录，停止摄像头
-  if (m === 'card') {
-    stopCamera()
-  }
+  // 切换时清除错误信息
+  authStore.error = null
 }
 
 /**
@@ -226,72 +273,28 @@ async function handleLogin() {
 }
 
 /**
- * 启动人脸识别登录流程
- * 获取摄像头权限，显示视频流，模拟识别过程
+ * 处理新用户注册
+ * 校验表单后调用注册接口，成功后提示用户切换登录
  */
-async function startFaceLogin() {
-  // 防止重复启动
-  if (isFaceRunning.value) return
-  
-  try {
-    // 设置运行状态为true
-    isFaceRunning.value = true
-    
-    // 获取摄像头权限并设置视频流
-    stream = await navigator.mediaDevices.getUserMedia({ 
-      video: { width: 640, height: 640, facingMode: 'user' } 
-    })
-    
-    // 将视频流绑定到video元素
-    if (videoRef.value) {
-      videoRef.value.srcObject = stream
-    }
-    
-    // 模拟识别延迟
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    // 模拟成功登录（实际应用中应调用真实的人脸识别API）
-    const ok = await authStore.login('face-user', 'face')
-    if (ok) {
-      stopCamera()
-      router.push('/')
-    }
-  } catch (e) {
-    // 处理摄像头访问失败或识别失败的情况
-    alert('无法访问摄像头或识别失败')
+async function handleRegister() {
+  if (!isRegisterValid.value) return
+
+  const success = await authStore.register(
+    registerId.value.trim(),
+    registerPassword.value,
+  )
+
+  if (success) {
+    registerSuccess.value = true
+    // 2秒后自动切回登录页
+    setTimeout(() => {
+      registerSuccess.value = false
+      loginMethod.value = 'card'
+      // 把注册的读者证号填入登录表单，方便用户直接登录
+      studentId.value = registerId.value
+    }, 2000)
   }
 }
-
-/**
- * 停止摄像头
- * 释放媒体流资源
- */
-function stopCamera() {
-  // 停止人脸识别状态
-  isFaceRunning.value = false
-  
-  // 释放媒体流
-  if (stream) {
-    stream.getTracks().forEach(track => track.stop())
-    stream = null
-  }
-  
-  // 清空视频源
-  if (videoRef.value) {
-    videoRef.value.srcObject = null
-  }
-}
-
-// 组件挂载时的初始化
-onMounted(() => {
-  // 可以在这里添加初始化逻辑
-})
-
-// 组件卸载时的清理
-onUnmounted(() => {
-  // 确保摄像头被正确释放
-  stopCamera()
-})
 </script>
 
 <style scoped>
@@ -301,13 +304,5 @@ onUnmounted(() => {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
-}
-@keyframes scan {
-  0% { top: 0; opacity: 0.8; }
-  50% { top: 100%; opacity: 0.4; }
-  100% { top: 0; opacity: 0.8; }
-}
-.animate-face-scan {
-  animation: scan 2s ease-in-out infinite;
 }
 </style>

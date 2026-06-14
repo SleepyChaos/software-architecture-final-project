@@ -64,6 +64,14 @@
         <div class="mt-6 text-center text-sm text-gray-500">
           <p>测试账号：001 / 123456</p>
         </div>
+
+        <!-- 注册入口 -->
+        <div class="mt-4 text-center text-sm text-gray-500">
+          还没有账号？
+          <router-link to="/mobile/register" class="text-blue-600 font-medium hover:underline">
+            立即注册
+          </router-link>
+        </div>
       </div>
     </div>
 

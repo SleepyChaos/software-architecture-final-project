@@ -345,6 +345,57 @@ def login(
     }
 
 
+# 用户注册接口
+@app.post("/register")
+def register(
+    user_data: schemas.UserRegister,
+    db: Session = Depends(database.get_db),
+):
+    """
+    用户注册接口，创建新用户并返回读者证号
+
+    参数:
+    - user_data: 包含 reader_id 和 password 的请求体
+    - db: 数据库会话，由FastAPI自动注入
+
+    返回:
+    - 注册成功返回 reader_id 和提示信息
+    - 用户已存在抛出 409 异常
+    """
+    # 检查用户是否已存在
+    existing_user = db.query(models.User).filter(
+        models.User.reader_id == user_data.reader_id
+    ).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="该读者证号已被注册",
+        )
+
+    # 创建新用户
+    new_user = models.User(
+        reader_id=user_data.reader_id,
+        hashed_password=get_password_hash(user_data.password),
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    try:
+        rabbitmq_breaker.call(
+            publish_event,
+            "auth.register_success",
+            {"reader_id": new_user.reader_id},
+        )
+    except Exception:
+        pass
+
+    return {
+        "reader_id": new_user.reader_id,
+        "message": "注册成功",
+    }
+
+
 @app.post("/token")
 def login_for_access_token(
     user_data: schemas.UserLogin,
