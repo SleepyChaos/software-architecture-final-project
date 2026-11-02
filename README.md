@@ -1,6 +1,14 @@
 # 图书管理系统
 
-软件架构期末项目，实现了一个基于 Vue 3 + FastAPI + PostgreSQL 的图书管理系统，支持 Docker Compose 和 Kubernetes 容器化部署。
+软件架构课程作品，以图书查询与借还界面为业务载体，实践 Vue 3 + FastAPI 前后端分离，以及数据库、缓存、搜索、消息队列、监控和容器编排。
+
+这是课程演示系统。图书样本来自 `backbone/mock_data.py`，登录包含预置账号与人脸模拟账号；各页面和中间件集成的范围以源码和下面的 API 表为准，不将演示登录解释为真实人脸识别能力。
+
+## 从哪里开始
+
+- 想完整体验：按 [Docker Compose](#docker-compose) 启动全部服务，访问 `http://localhost:8080`。
+- 想读代码：先看 `src/router/`、`src/views/` 与 `backbone/main.py`，再看 [项目结构](#项目结构)。
+- 想了解架构取舍：阅读 [项目技术栈说明](项目技术栈应用说明文档.md)、[代码结构图](代码结构图.md) 和 [Prometheus 查询说明](Prometheus查询说明.md)。
 
 ## 技术栈
 
@@ -29,26 +37,42 @@
 
 ### 原生开发
 
-```bash
-# 1. 启动 PostgreSQL（需要提前安装或启动 Docker 容器）
-# 2. 后端
-cd backbone
-pip install -r requirements.txt
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+需要 Node.js/npm、Python 3.11（与后端镜像一致）和 PostgreSQL。若要体验完整搜索、缓存及热词链路，还需要 Redis、Elasticsearch 和 RabbitMQ；推荐直接使用下方 Compose 方式准备这些服务。
 
-# 3. 前端
-npm install
+后端终端，从仓库根目录执行：
+
+```bash
+python -m venv .venv
+# macOS / Linux：
+source .venv/bin/activate
+# Windows PowerShell 改用：.\.venv\Scripts\Activate.ps1
+python -m pip install -r backbone/requirements.txt
+cd backbone
+python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```
+
+另开一个终端，从仓库根目录启动前端：
+
+```bash
+npm ci
 npm run dev
 ```
 
+前端地址以 Vite 输出为准（默认 `http://localhost:5173`），移动端入口为 `/mobile.html`，也可运行 `npm run dev:mobile`。本地开发的 API 地址由 `.env.development` 指定；后端连接变量见 [环境变量](#环境变量)。后端单独启动不会同时启动 `rabbitmq_worker.py`，需要热词异步统计时另行启动 Worker，或使用 Compose。
+
 ### Docker Compose
 
+需要已启动的 Docker Engine / Docker Desktop 与 Docker Compose。前端 Dockerfile 复制本地 `dist/`，因此先构建前端，再构建镜像：
+
 ```bash
-npm install
+npm ci
 npm run build
 docker compose build
 docker compose up -d --scale backend=3
+docker compose ps
 ```
+
+首次运行需要下载数据库、搜索和消息队列等镜像；Elasticsearch 也需要一定内存。检查问题时执行 `docker compose logs --tail=100 backend rabbitmq-worker`。停止执行 `docker compose down`，该命令保留数据库和监控卷；`down -v` 会删除这些卷中的数据。
 
 访问 [http://localhost:8080](http://localhost:8080)
 
@@ -56,8 +80,11 @@ Prometheus 访问 [http://localhost:9090](http://localhost:9090)。后端指标�
 
 ### Kubernetes
 
+需要已配置的 Kubernetes 集群，并确保集群节点可以读取下方构建的镜像；镜像导入或推送方式取决于所用的本地集群/镜像仓库。
+
 ```bash
-npm install && npm run build
+npm ci
+npm run build
 docker build -t library-system-frontend:latest .
 docker build -t library-system-backend:latest -f backbone/Dockerfile .
 kubectl apply -f k8s/
@@ -144,3 +171,28 @@ Prometheus 在 K8s 中通过 `library-prometheus` 服务访问，执行 `kubectl
 
 - `prometheus.yml`：Prometheus 抓取配置，默认采集 `backend:8000/metrics`
 - 如果你把后端直接跑在本机而不是 Compose/K8s 里，把 `prometheus.yml` 里的目标改成 `host.docker.internal:8000`
+
+
+## 开发检查与体验流程
+
+在仓库根目录执行前端检查：
+
+```bash
+npm ci
+npm run check
+npm run lint
+npm run build
+```
+
+启动服务后，依次检查普通账号登录、图书查询、搜索建议、搜索热词和统计页面。通过 `GET /healthz` 检查后端，通过 Prometheus 查看指标。搜索失败时的本地过滤降级不等于 Elasticsearch 已正常工作，热词更新则依赖 RabbitMQ Worker 与 Redis。
+
+## 演示边界
+
+- 预置账号、默认数据库账号和模拟人脸登录服务于本地课程演示，未包含完整的生产身份与权限方案。
+- 页面包含借还与历史展示；后端实际提供的服务以 [API 表](#api-接口) 为准，不将每个前端交互都视为已实现的持久化 API。
+- PostgreSQL 数据与 Prometheus 数据使用 Compose 卷；Redis、搜索索引及演示样本的生命周期与之不同。
+- Python 依赖目前列于 `backbone/requirements.txt`，并非全部精确锁定；复现遇到版本差异时应记录实际依赖版本。
+
+## 授权说明
+
+仓库目前未提供独立的项目许可证；第三方依赖和示例素材遵循各自许可证。
